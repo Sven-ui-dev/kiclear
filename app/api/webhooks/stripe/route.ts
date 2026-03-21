@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
 
       case 'customer.subscription.updated': {
         const sub = event.data.object as Stripe.Subscription;
-        const { getSubscriptionTier } = await import('@/lib/stripe');
-        const tier = await getSubscriptionTier(sub.id);
+        const { getTierFromSubscription } = await import('@/lib/stripe');
+        const tier = getTierFromSubscription(sub);
         const raw = sub as unknown as { current_period_start: number; current_period_end: number };
 
         await supabaseAdmin

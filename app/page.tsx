@@ -8,9 +8,9 @@ const FEATURES = [
 ];
 
 const TIERS = [
-  { name: 'Starter', price: '49', target: 'Bis 10 Mitarbeiter', highlight: false, features: ['7 Dokumente', '1× jährliches Update', 'PDF + DOCX', 'E-Mail Support'] },
-  { name: 'Business', price: '99', target: '10–50 Mitarbeiter', highlight: true,  features: ['7–12 Dokumente', 'Update bei Gesetzesänderung', 'Audit-Trail & Versionsprotokoll', 'Diff-E-Mail bei Updates', 'Priority Support'] },
-  { name: 'Pro', price: '149', target: '50–250 Mitarbeiter', highlight: false,   features: ['Alle Business Features', 'Sofort-Update bei Assessment-Änderung', 'Radiar.ai Integration', 'TokenAudit.ai Integration'] },
+  { name: 'Starter', price: '49', target: 'Einmaliges Paket', highlight: false, features: ['7 Dokumente', '1× jährliches Kalender-Update', 'PDF + DOCX', 'E-Mail Support'] },
+  { name: 'Business', price: '99', target: 'Mit Gesetzgebungs-Updates', highlight: true,  features: ['7–12 Dokumente', 'Auto-Update bei Gesetzesänderung', 'Diff-E-Mail bei Updates', 'Audit-Trail & Versionsprotokoll', 'Priority Support'] },
+  { name: 'Pro', price: '149', target: 'Mit Sofort-Updates', highlight: false,   features: ['Alle Business Features', 'Sofort-Update bei Assessment-Änderung', 'Radiar.ai Integration', 'TokenAudit.ai Integration'] },
 ];
 
 export default function LandingPage() {
@@ -86,8 +86,55 @@ export default function LandingPage() {
 
       {/* Pricing */}
       <section className="max-w-5xl mx-auto px-6 py-16">
-        <h2 className="text-4xl font-bold text-white text-center mb-4 tracking-tight">Einfaches Pricing</h2>
-        <p className="text-white/40 text-center mb-12">Monatlich kündbar. Keine Einrichtungsgebühren.</p>
+        <h2 className="text-4xl font-bold text-white text-center mb-4 tracking-tight">
+          Der Unterschied liegt im Update
+        </h2>
+        <p className="text-white/40 text-center mb-4">
+          Alle Pläne enthalten das vollständige Dokument-Bundle. Was sich unterscheidet: wie aktuell Ihre Dokumente bleiben.
+        </p>
+        <p className="text-white/25 text-center text-xs font-mono mb-12">Monatlich kündbar · Keine Einrichtungsgebühren</p>
+
+        {/* Update-Vergleich */}
+        <div className="bg-bg-card border border-white/7 rounded-2xl p-5 mb-8 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/5">
+                <th className="text-left text-white/40 font-normal pb-3 pr-6">Update-Trigger</th>
+                <th className="text-center text-white/60 font-semibold pb-3 px-4">Starter<br/><span className="font-mono text-brand-green text-xs">€49</span></th>
+                <th className="text-center text-white font-semibold pb-3 px-4 bg-brand-green/5 rounded-t-lg">Business<br/><span className="font-mono text-brand-green text-xs">€99</span></th>
+                <th className="text-center text-white/60 font-semibold pb-3 px-4">Pro<br/><span className="font-mono text-brand-green text-xs">€149</span></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              <tr>
+                <td className="py-3 pr-6 text-white/60">🗓 Jährliches Kalender-Update</td>
+                <td className="text-center py-3 px-4 text-brand-green">✓</td>
+                <td className="text-center py-3 px-4 text-brand-green bg-brand-green/5">✓</td>
+                <td className="text-center py-3 px-4 text-brand-green">✓</td>
+              </tr>
+              <tr>
+                <td className="py-3 pr-6 text-white/60">⚡ Auto-Update bei Gesetzesänderung</td>
+                <td className="text-center py-3 px-4 text-white/20">–</td>
+                <td className="text-center py-3 px-4 text-brand-green bg-brand-green/5">✓</td>
+                <td className="text-center py-3 px-4 text-brand-green">✓</td>
+              </tr>
+              <tr>
+                <td className="py-3 pr-6 text-white/60">🔄 Sofort-Update bei Assessment-Änderung</td>
+                <td className="text-center py-3 px-4 text-white/20">–</td>
+                <td className="text-center py-3 px-4 text-white/20 bg-brand-green/5">–</td>
+                <td className="text-center py-3 px-4 text-brand-green">✓</td>
+              </tr>
+              <tr>
+                <td className="py-3 pr-6 text-white/60">📧 Diff-E-Mail was sich geändert hat</td>
+                <td className="text-center py-3 px-4 text-white/20">–</td>
+                <td className="text-center py-3 px-4 text-brand-green bg-brand-green/5">✓</td>
+                <td className="text-center py-3 px-4 text-brand-green">✓</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Tier Cards */}
         <div className="grid md:grid-cols-3 gap-6">
           {TIERS.map(tier => (
             <div key={tier.name} className={`rounded-2xl p-6 border flex flex-col ${
@@ -101,7 +148,7 @@ export default function LandingPage() {
                 </div>
               )}
               <h3 className="text-xl font-bold text-white mb-1">{tier.name}</h3>
-              <p className="text-white/40 text-sm mb-4">{tier.target}</p>
+              <p className="text-xs font-mono text-brand-green/70 mb-4">{tier.target}</p>
               <div className="mb-6">
                 <span className="text-4xl font-bold text-white">€{tier.price}</span>
                 <span className="text-white/40 text-sm">/Monat</span>

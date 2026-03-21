@@ -74,7 +74,7 @@ function CheckoutContent() {
               <div className="flex justify-between items-center">
                 <div>
                   <span className="font-bold text-white">{t.name}</span>
-                  <span className="text-white/40 text-sm ml-2">{t.targetGroup}</span>
+                  <span className="text-xs font-mono text-brand-green border border-brand-green/20 bg-brand-green/8 px-2 py-0.5 rounded ml-2">{t.targetGroup}</span>
                 </div>
                 <span className="font-mono font-bold text-white">€{t.price}/Mo.</span>
               </div>

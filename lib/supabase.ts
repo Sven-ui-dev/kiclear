@@ -51,7 +51,7 @@ export function getSupabaseAdmin() {
   return adminClient;
 }
 
-// Backward compatible export - use as: supabaseAdmin.from(), supabaseAdmin.storage, etc.
+// Backward compatible export
 export const supabaseAdmin = new Proxy({} as any, {
   get(_, prop) {
     return (...args: any[]) => (getSupabaseAdmin() as any)[prop](...args);

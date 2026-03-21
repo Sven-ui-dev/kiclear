@@ -20,10 +20,10 @@ export async function POST(_req: NextRequest) {
   const APP = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kiclear.ai';
 
   try {
-    const portalUrl = await createPortalSession(
-      sub.stripe_customer_id,
-      `${APP}/dashboard/settings`
-    );
+    const portalUrl = await createPortalSession({
+      customerId: sub.stripe_customer_id,
+      returnUrl: `${APP}/dashboard/settings`
+    });
     return Response.json({ portal_url: portalUrl });
   } catch (e) {
     console.error('[/api/subscription/portal]', e);

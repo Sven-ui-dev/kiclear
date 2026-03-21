@@ -89,7 +89,7 @@ export async function deleteUserDocuments(userId: string): Promise<number> {
 
   if (!files || files.length === 0) return 0;
 
-  const paths = files.map(f => `${userId}/${f.name}`);
+  const paths = files.map((f: { name: string }) => `${userId}/${f.name}`);
   await supabaseAdmin.storage.from(BUCKET).remove(paths);
   return paths.length;
 }
