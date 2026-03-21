@@ -23,7 +23,7 @@ export const stripe = new Proxy({} as Stripe, {
   }
 });
 
-// ── Export getStripe for internal use ────────────────────────────────────────
+// Export getStripe for internal use
 export { getStripe };
 
 // ── Create checkout session ───────────────────────────────────────────────────
@@ -39,53 +39,61 @@ export async function createCheckoutSession(params: {
   if (!tierConfig?.priceId) throw new Error(`No price ID for tier: ${params.tier}`);
 
   const session = await getStripe().checkout.sessions.create({
-    mode:               'subscription',
+    mode: 'subscription',
     payment_method_types: ['card', 'sepa_debit'],
-    customer_email:     params.email,
     line_items: [{ price: tierConfig.priceId, quantity: 1 }],
+    success_url: params.successUrl,
+    cancel_url: params.cancelUrl,
     metadata: {
-      user_id:        params.userId,
-      tier:           params.tier,
+      user_id: params.userId,
+      tier: params.tier,
       transfer_token: params.transferToken ?? '',
     },
+    customer_email: params.email,
     subscription_data: {
-      metadata: { user_id: params.userId, tier: params.tier },
+      metadata: { user_id: params.userId },
     },
-    success_url: params.successUrl,
-    cancel_url:  params.cancelUrl,
-    locale:      'de',
-    allow_promotion_codes: true,
   });
 
-  return session.url!;
+  if (!session.url) throw new Error('No checkout URL created');
+  return session.url;
 }
 
 // ── Create portal session ─────────────────────────────────────────────────────
-export async function createPortalSession(
-  stripeCustomerId: string,
-  returnUrl: string
-): Promise<string> {
+export async function createPortalSession(params: {
+  customerId: string;
+  returnUrl: string;
+}): Promise<string> {
   const session = await getStripe().billingPortal.sessions.create({
-    customer:   stripeCustomerId,
-    return_url: returnUrl,
+    customer: params.customerId,
+    return_url: params.returnUrl,
   });
   return session.url;
 }
 
-// ── Parse webhook ─────────────────────────────────────────────────────────────
-export function constructWebhookEvent(body: string, signature: string): Stripe.Event {
+// ── Construct webhook event ───────────────────────────────────────────────────
+export function constructWebhookEvent(
+  payload: string | Buffer,
+  signature: string
+): Stripe.Event {
   return getStripe().webhooks.constructEvent(
-    body,
+    payload,
     signature,
     process.env.STRIPE_WEBHOOK_SECRET!
   );
 }
 
-// ── Get tier from subscription ────────────────────────────────────────────────
-export async function getSubscriptionTier(
+// ── Retrieve subscription ───────────────────────────────────────────────────
+export async function retrieveSubscription(
   stripeSubscriptionId: string
-): Promise<SubscriptionTier | null> {
+): Promise<Stripe.Subscription> {
   const sub = await getStripe().subscriptions.retrieve(stripeSubscriptionId);
+  return sub;
+}
+
+// ── Get tier from price ID ─────────────────────────────────────────────────
+export function getTierFromSubscription(sub: Stripe.Subscription): SubscriptionTier {
   const priceId = sub.items.data[0]?.price.id;
-  return priceId ? getTierFromPriceId(priceId) : null;
+  if (!priceId) return 'business';
+  return getTierFromPriceId(priceId) ?? 'business';
 }
