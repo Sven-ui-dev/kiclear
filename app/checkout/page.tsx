@@ -39,20 +39,34 @@ export default function CheckoutPage() {
       }
 
       if (!res.ok) {
-        // Echte Fehlermeldung aus API lesen
-        let msg = 'Checkout-Fehler';
+        // API gibt { error: { code, message } } zurück (api-helpers.ts Format)
+        let msg = `Serverfehler (${res.status})`;
         try {
           const d = await res.json();
-          msg = d.message ?? d.error ?? `Serverfehler (${res.status})`;
+          // Verschiedene Error-Shapes abfangen:
+          // { error: { message: '...' } }  ← api-helpers Format
+          // { error: '...' }               ← einfacher String
+          // { message: '...' }             ← direktes message-Feld
+          if (typeof d?.error === 'object' && d.error?.message) {
+            msg = d.error.message;
+          } else if (typeof d?.error === 'string') {
+            msg = d.error;
+          } else if (typeof d?.message === 'string') {
+            msg = d.message;
+          }
+          console.error('[checkout] API error:', JSON.stringify(d));
         } catch { /* ignore parse error */ }
         throw new Error(msg);
       }
 
-      const { checkout_url } = await res.json();
-      if (!checkout_url) throw new Error('Keine Checkout-URL erhalten.');
-      window.location.href = checkout_url;
+      const body = await res.json();
+      console.log('[checkout] API response:', JSON.stringify(body));
+      if (!body.checkout_url) throw new Error('Keine Checkout-URL erhalten – bitte Support kontaktieren.');
+      window.location.href = body.checkout_url;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unbekannter Fehler');
+      const msg = e instanceof Error ? e.message : JSON.stringify(e);
+      console.error('[checkout] Error:', msg);
+      setError(msg);
       setLoading(false);
     }
   };
