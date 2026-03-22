@@ -2,24 +2,24 @@ import Stripe from 'stripe';
 import type { SubscriptionTier } from '@/types';
 import { TIER_MAP, getTierFromPriceId } from '@/config/pricing';
 
-// Lazy initialization - Stripe SDK nutzt seine eigene kompatible Version
-let stripeInstance: Stripe | null = null;
+// Lazy-Init: Stripe erst beim ersten Aufruf instanziieren
+// Verhindert Fehler wenn STRIPE_SECRET_KEY beim Modul-Import noch nicht verfügbar
+let _stripe: Stripe | null = null;
 
-function getStripe(): Stripe {
-  if (!stripeInstance) {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      throw new Error('STRIPE_SECRET_KEY is not set');
-    }
-    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+export function getStripe(): Stripe {
+  if (!_stripe) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) throw new Error('STRIPE_SECRET_KEY ist nicht konfiguriert.');
+    _stripe = new Stripe(key);
   }
-  return stripeInstance;
+  return _stripe;
 }
 
-// Proxy for backward compatibility
+// Rückwärtskompatibel
 export const stripe = new Proxy({} as Stripe, {
-  get(_, prop) {
-    return (...args: any[]) => (getStripe() as any)[prop](...args);
-  }
+  get(_t, prop) {
+    return (getStripe() as unknown as Record<string | symbol, unknown>)[prop];
+  },
 });
 
 // ── Create checkout session ───────────────────────────────────────────────────
