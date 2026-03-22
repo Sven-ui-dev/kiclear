@@ -37,6 +37,8 @@ export async function createCheckoutSession(params: {
 
   const session = await stripe.checkout.sessions.create({
     mode:               'subscription',
+    // payment_method_types weglassen → Stripe wählt automatisch
+    // (card immer verfügbar; SEPA nur wenn im Stripe-Dashboard aktiviert)
     customer_email:     params.email,
     line_items: [{ price: tierConfig.priceId, quantity: 1 }],
     metadata: {
