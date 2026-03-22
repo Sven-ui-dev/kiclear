@@ -10,6 +10,8 @@
   --color-amber: #FFB800;
   --color-red: #FF4757;
   --color-blue: #4A9EFF;
+  --font-sans: var(--font-sora), system-ui, sans-serif;
+  --font-mono: var(--font-space-mono), monospace;
 }
 
 :root {
@@ -28,5 +30,5 @@ html { scroll-behavior: smooth; }
 
 body {
   background: var(--bg);
-  font-family: 'Sora', system-ui, sans-serif;
+  font-family: var(--font-sora);
 }
