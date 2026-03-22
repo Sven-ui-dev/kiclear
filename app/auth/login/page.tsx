@@ -7,7 +7,9 @@ import { supabaseBrowser } from '@/lib/supabase';
 function LoginContent() {
   const router   = useRouter();
   const params   = useSearchParams();
-  const redirect = params.get('redirect') ?? '/dashboard';
+  const rawRedirect = params.get('redirect') ?? '/dashboard';
+  const redirect = decodeURIComponent(rawRedirect);
+  const autostart = params.get('autostart') === '1';
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -42,7 +44,11 @@ function LoginContent() {
 
       // Erfolg → redirect ohne router.refresh() der State killt
       didRedirect = true;
-      window.location.href = redirect;
+      // Checkout-Seite soll nach Login automatisch Stripe starten
+      const dest = redirect.startsWith('/checkout')
+        ? redirect + (redirect.includes('?') ? '&autostart=1' : '?autostart=1')
+        : redirect;
+      window.location.href = dest;
 
     } catch (err) {
       setError(
@@ -129,7 +135,6 @@ function LoginContent() {
     </main>
   );
 }
-
 
 export default function LoginPage() {
   return (

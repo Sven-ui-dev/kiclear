@@ -7,7 +7,9 @@ import { supabaseBrowser } from '@/lib/supabase';
 function RegisterContent() {
   const router   = useRouter();
   const params   = useSearchParams();
-  const redirect = params.get('redirect') ?? '/dashboard';
+  const rawRedirect = params.get('redirect') ?? '/dashboard';
+  const redirect = decodeURIComponent(rawRedirect);
+  const autostart = params.get('autostart') === '1';
 
   const [email,      setEmail]      = useState('');
   const [password,   setPassword]   = useState('');
@@ -50,7 +52,11 @@ function RegisterContent() {
       // Wenn E-Mail-Bestätigung deaktiviert → Session sofort vorhanden
       if (data.session) {
         didRedirect = true;
-        window.location.href = redirect;
+        // Checkout-Seite soll nach Login automatisch Stripe starten
+        const dest = redirect.startsWith('/checkout')
+          ? redirect + (redirect.includes('?') ? '&autostart=1' : '?autostart=1')
+          : redirect;
+        window.location.href = dest;
       } else {
         setRegistered(true);
       }
@@ -178,7 +184,6 @@ function RegisterContent() {
     </main>
   );
 }
-
 
 export default function RegisterPage() {
   return (

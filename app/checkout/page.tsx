@@ -13,6 +13,13 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState('');
   const transferToken = params.get('transfer');
+  const autostart     = params.get('autostart') === '1';
+
+  // Auto-trigger nach Redirect von Login/Register
+  useEffect(() => {
+    if (autostart) handleCheckout();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autostart]);
 
   const handleCheckout = async () => {
     setLoading(true);
@@ -26,8 +33,9 @@ function CheckoutContent() {
       });
 
       if (res.status === 401) {
-        // Not logged in – go to register first
-        router.push(`/auth/register?redirect=/checkout?tier=${tier}${transferToken ? `&transfer=${transferToken}` : ''}`);
+        // Not logged in – go to register first, encode the full redirect URL
+        const redirectTarget = `/checkout?tier=${tier}${transferToken ? `&transfer=${transferToken}` : ''}`;
+        window.location.href = `/auth/register?redirect=${encodeURIComponent(redirectTarget)}`;
         return;
       }
 
@@ -114,7 +122,6 @@ function CheckoutContent() {
     </main>
   );
 }
-
 
 export default function CheckoutPage() {
   return (
