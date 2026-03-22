@@ -5,9 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase';
 
 function LoginContent() {
-  const router      = useRouter();
-  const params      = useSearchParams();
-  const redirect    = params.get('redirect') ?? '/dashboard';
+  const router   = useRouter();
+  const params   = useSearchParams();
+  const redirect = params.get('redirect') ?? '/dashboard';
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -18,14 +18,31 @@ function LoginContent() {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const { error } = await supabaseBrowser.auth.signInWithPassword({ email, password });
-    if (error) {
-      setError(error.message === 'Invalid login credentials'
-        ? 'E-Mail oder Passwort falsch.'
-        : error.message);
-      setLoading(false);
-    } else {
+
+    try {
+      // Lazy import um Proxy-Initialisierung zu triggern
+      const { getSupabaseBrowser } = await import('@/lib/supabase');
+      const sb = getSupabaseBrowser();
+
+      const { error: authError } = await sb.auth.signInWithPassword({ email, password });
+
+      if (authError) {
+        setError(
+          authError.message.includes('Invalid login credentials')
+            ? 'E-Mail oder Passwort falsch.'
+            : authError.message.includes('Email not confirmed')
+            ? 'Bitte bestätigen Sie zuerst Ihre E-Mail-Adresse.'
+            : `Fehler: ${authError.message}`
+        );
+        return;
+      }
+
       router.push(redirect);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Verbindungsfehler. Bitte Seite neu laden.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -45,8 +62,10 @@ function LoginContent() {
             <input
               type="email" required autoComplete="email"
               value={email} onChange={e => setEmail(e.target.value)}
+              disabled={loading}
               className="w-full bg-bg-card border border-white/10 rounded-xl px-4 py-3 text-white
-                placeholder-white/20 focus:outline-none focus:border-brand-green/50 transition-colors text-sm"
+                placeholder-white/20 focus:outline-none focus:border-brand-green/50 transition-colors
+                text-sm disabled:opacity-50"
               placeholder="name@unternehmen.de"
             />
           </div>
@@ -55,8 +74,10 @@ function LoginContent() {
             <input
               type="password" required autoComplete="current-password"
               value={password} onChange={e => setPassword(e.target.value)}
+              disabled={loading}
               className="w-full bg-bg-card border border-white/10 rounded-xl px-4 py-3 text-white
-                placeholder-white/20 focus:outline-none focus:border-brand-green/50 transition-colors text-sm"
+                placeholder-white/20 focus:outline-none focus:border-brand-green/50 transition-colors
+                text-sm disabled:opacity-50"
               placeholder="••••••••"
             />
           </div>
@@ -69,17 +90,21 @@ function LoginContent() {
 
           <button
             type="submit" disabled={loading}
-            className="w-full bg-brand-green text-bg font-bold py-3 rounded-xl
-              hover:bg-green-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+            className="w-full bg-brand-green text-bg font-bold py-3 rounded-xl mt-2
+              hover:bg-green-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed
+              flex items-center justify-center gap-2"
           >
+            {loading && <span className="w-4 h-4 border-2 border-bg/30 border-t-bg rounded-full animate-spin" />}
             {loading ? 'Einloggen…' : 'Einloggen →'}
           </button>
         </form>
 
         <p className="text-white/30 text-sm text-center mt-6">
           Noch kein Konto?{' '}
-          <a href={`/auth/register${redirect !== '/dashboard' ? `?redirect=${redirect}` : ''}`}
-            className="text-brand-green hover:text-green-300 transition-colors">
+          <a
+            href={`/auth/register${redirect !== '/dashboard' ? `?redirect=${encodeURIComponent(redirect)}` : ''}`}
+            className="text-brand-green hover:text-green-300 transition-colors"
+          >
             Registrieren
           </a>
         </p>

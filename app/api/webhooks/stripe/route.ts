@@ -1,6 +1,6 @@
 // POST /api/webhooks/stripe – Stripe Webhook Handler
 import { NextRequest } from 'next/server';
-import { stripe, constructWebhookEvent } from '@/lib/stripe';
+import { stripe, constructWebhookEvent, getTierFromSubscription } from '@/lib/stripe';
 import { supabaseAdmin } from '@/lib/supabase';
 import type Stripe from 'stripe';
 
@@ -51,7 +51,6 @@ export async function POST(req: NextRequest) {
 
       case 'customer.subscription.updated': {
         const sub = event.data.object as Stripe.Subscription;
-        const { getTierFromSubscription } = await import('@/lib/stripe');
         const tier = getTierFromSubscription(sub);
         const raw = sub as unknown as { current_period_start: number; current_period_end: number };
 

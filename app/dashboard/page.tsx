@@ -4,7 +4,6 @@
 // ────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabaseBrowser } from '@/lib/supabase';
 
 interface Subscription {
   tier: string;
@@ -61,11 +60,18 @@ export default function DashboardPage() {
   const [polling,    setPolling]    = useState<string | null>(null);
 
   useEffect(() => {
-    supabaseBrowser.auth.getUser().then(({ data }: { data: { user: any } }) => {
-      if (!data.user) { router.push('/auth/login'); return; }
-      setUser({ email: data.user.email ?? '' });
-      loadData();
-    });
+    (async () => {
+      try {
+        const { getSupabaseBrowser } = await import('@/lib/supabase');
+        const sb = getSupabaseBrowser();
+        const { data } = await sb.auth.getUser();
+        if (!data.user) { router.push('/auth/login'); return; }
+        setUser({ email: data.user.email ?? '' });
+        loadData();
+      } catch {
+        router.push('/auth/login');
+      }
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -115,7 +121,11 @@ export default function DashboardPage() {
     } catch (e) { setGenError(e instanceof Error ? e.message : 'Fehler'); setGenerating(false); }
   };
 
-  const handleLogout = async () => { await supabaseBrowser.auth.signOut(); router.push('/'); };
+  const handleLogout = async () => {
+    const { getSupabaseBrowser } = await import('@/lib/supabase');
+    await getSupabaseBrowser().auth.signOut();
+    router.push('/');
+  };
   const handlePortal = async () => {
     const r = await fetch('/api/subscription/portal', { method: 'POST' });
     if (r.ok) { const { portal_url } = await r.json(); window.location.href = portal_url; }
