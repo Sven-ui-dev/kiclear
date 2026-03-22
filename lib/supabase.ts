@@ -51,9 +51,15 @@ export function getSupabaseAdmin() {
   return adminClient;
 }
 
-// Backward compatible export
+// Backward compatible exports
 export const supabaseAdmin = new Proxy({} as any, {
   get(_, prop) {
     return (...args: any[]) => (getSupabaseAdmin() as any)[prop](...args);
+  }
+});
+
+export const supabaseBrowser = new Proxy({} as any, {
+  get(_, prop) {
+    return (...args: any[]) => (getSupabaseBrowser() as any)[prop](...args);
   }
 });

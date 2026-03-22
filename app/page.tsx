@@ -175,11 +175,22 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-white/7 px-6 py-6 text-center">
-        <p className="text-white/20 text-xs font-mono">
-          kiclear.ai · Tocay Operations UG (haftungsbeschränkt) · Marbach am Neckar ·{' '}
-          <a href="https://onclear.ai" className="hover:text-white/40">onclear.ai</a> ·{' '}
-          <a href={process.env.NEXT_PUBLIC_KICHECK_URL ?? 'https://kicheck.ai'} className="hover:text-white/40">kicheck.ai</a>
-        </p>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 max-w-5xl mx-auto">
+          <p className="text-white/20 text-xs font-mono">
+            kiclear.ai · Tocay Operations UG (haftungsbeschränkt) · Marbach am Neckar
+          </p>
+          <div className="flex gap-4 text-xs text-white/20 font-mono">
+            <a href="/impressum"    className="hover:text-white/40 transition-colors">Impressum</a>
+            <span>·</span>
+            <a href="/datenschutz" className="hover:text-white/40 transition-colors">Datenschutz</a>
+            <span>·</span>
+            <a href="/agb"         className="hover:text-white/40 transition-colors">AGB</a>
+            <span>·</span>
+            <a href="https://onclear.ai" className="hover:text-white/40 transition-colors">onclear.ai</a>
+            <span>·</span>
+            <a href={process.env.NEXT_PUBLIC_KICHECK_URL ?? 'https://kicheck.ai'} className="hover:text-white/40 transition-colors">kicheck.ai</a>
+          </div>
+        </div>
       </footer>
     </main>
   );
