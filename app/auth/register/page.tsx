@@ -25,10 +25,20 @@ export default function RegisterPage() {
       const { getSupabaseBrowser } = await import('@/lib/supabase');
       const sb = getSupabaseBrowser();
 
+      // emailRedirectTo: Supabase schickt Bestätigungs-E-Mail mit diesem Link
+      // Der Callback tauscht den Code gegen eine Session und setzt den Cookie
+      const redirectTarget = redirect.startsWith('/checkout')
+        ? redirect + (redirect.includes('?') ? '&autostart=1' : '?autostart=1')
+        : redirect;
+      const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTarget)}`;
+
       const { data, error: authError } = await sb.auth.signUp({
         email,
         password,
-        options: { data: { company_name: company } },
+        options: {
+          data:             { company_name: company },
+          emailRedirectTo:  callbackUrl,
+        },
       });
 
       if (authError) {
@@ -48,7 +58,7 @@ export default function RegisterPage() {
       // Wenn E-Mail-Bestätigung deaktiviert → Session sofort vorhanden
       if (data.session) {
         didRedirect = true;
-        // Checkout-Seite soll nach Login automatisch Stripe starten
+        // Session sofort vorhanden (E-Mail-Bestätigung deaktiviert)
         const dest = redirect.startsWith('/checkout')
           ? redirect + (redirect.includes('?') ? '&autostart=1' : '?autostart=1')
           : redirect;
