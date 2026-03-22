@@ -10,7 +10,6 @@ function getStripe(): Stripe {
       throw new Error('STRIPE_SECRET_KEY is not set');
     }
     stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2024-06-20' as never,
     });
   }
   return stripeInstance;
