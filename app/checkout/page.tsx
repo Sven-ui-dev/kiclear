@@ -1,12 +1,11 @@
 'use client';
 
-import { Suspense } from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { TIERS } from '@/config/pricing';
 import type { SubscriptionTier } from '@/types';
 
-function CheckoutContent() {
+export default function CheckoutPage() {
   const router       = useRouter();
   const params       = useSearchParams();
   const [tier, setTier]     = useState<SubscriptionTier>((params.get('tier') as SubscriptionTier) ?? 'business');
@@ -144,14 +143,5 @@ function CheckoutContent() {
         </p>
       </div>
     </main>
-  );
-}
-
-
-export default function CheckoutPage() {
-  return (
-    <Suspense fallback={<div className='min-h-screen bg-bg flex items-center justify-center'><span className='text-white/50'>Laden...</span></div>}>
-      <CheckoutContent />
-    </Suspense>
   );
 }

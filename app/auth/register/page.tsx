@@ -1,10 +1,8 @@
 'use client'; // build: 2026-03-22
-import { Suspense } from 'react';
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabaseBrowser } from '@/lib/supabase';
 
-function RegisterContent() {
+export default function RegisterPage() {
   const router   = useRouter();
   const params   = useSearchParams();
   const redirect = params.get('redirect') ?? '/dashboard';
@@ -180,14 +178,5 @@ function RegisterContent() {
         </p>
       </div>
     </main>
-  );
-}
-
-
-export default function RegisterPage() {
-  return (
-    <Suspense fallback={<div className='min-h-screen bg-bg flex items-center justify-center'><span className='text-white/50'>Laden...</span></div>}>
-      <RegisterContent />
-    </Suspense>
   );
 }
