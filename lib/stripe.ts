@@ -31,7 +31,7 @@ export async function createCheckoutSession(params: {
   userId:      string;
   email:       string;
   tier:        SubscriptionTier;
-  transferToken?: string | null; // from kicheck.ai
+  transferToken?: string | null;
   successUrl:  string;
   cancelUrl:   string;
 }): Promise<string> {
