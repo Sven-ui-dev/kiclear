@@ -71,12 +71,20 @@ export default function DashboardPage() {
         setUser({ email: data.user.email ?? '' });
 
         // Nach Stripe-Checkout: Subscription sofort aus Stripe holen
-        // (Fallback falls Webhook noch nicht konfiguriert)
         const sessionId = searchParams.get('session_id');
         if (sessionId && searchParams.get('checkout') === 'success') {
-          await fetch(`/api/checkout/sync?session_id=${sessionId}`, {
-            credentials: 'include',
-          });
+          try {
+            const syncRes = await fetch(`/api/checkout/sync?session_id=${sessionId}`, {
+              credentials: 'include',
+            });
+            const syncData = await syncRes.json();
+            console.log('[dashboard] sync result:', syncData);
+            if (!syncRes.ok) {
+              console.error('[dashboard] sync error:', syncData);
+            }
+          } catch (syncErr) {
+            console.error('[dashboard] sync fetch error:', syncErr);
+          }
         }
 
         loadData();
@@ -180,6 +188,16 @@ export default function DashboardPage() {
               <p className="text-white/50 text-sm">Wählen Sie einen Plan um Ihr Nachweispaket zu generieren.</p>
             </div>
             <a href="/checkout" className="shrink-0 bg-brand-green text-bg font-bold px-5 py-2.5 rounded-xl hover:bg-green-300 transition-colors text-sm">Plan wählen →</a>
+          </div>
+        )}
+
+        {/* Checkout-Fehler Banner */}
+        {searchParams.get('checkout') === 'error' && (
+          <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4 flex items-center justify-between gap-4">
+            <p className="text-red-400 text-sm">
+              ⚠️ Abo konnte nicht aktiviert werden ({searchParams.get('reason') ?? 'unbekannt'}).
+              Bitte <a href="mailto:hallo@kiclear.ai" className="underline">Support kontaktieren</a>.
+            </p>
           </div>
         )}
 
