@@ -37,7 +37,6 @@ export async function createCheckoutSession(params: {
 
   const session = await stripe.checkout.sessions.create({
     mode:               'subscription',
-    payment_method_types: ['card', 'sepa_debit'],
     customer_email:     params.email,
     line_items: [{ price: tierConfig.priceId, quantity: 1 }],
     metadata: {
