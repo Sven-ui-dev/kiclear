@@ -30,7 +30,8 @@ export async function POST(req: NextRequest) {
 
     return Response.json({ checkout_url: checkoutUrl });
   } catch (e) {
-    console.error('[/api/subscription/checkout]', e);
-    return E.internal('Checkout-Session konnte nicht erstellt werden.');
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[/api/subscription/checkout]', msg);
+    return E.internal(`Checkout-Session konnte nicht erstellt werden: ${msg}`);
   }
 }
