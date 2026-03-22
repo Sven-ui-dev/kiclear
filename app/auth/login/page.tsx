@@ -7,9 +7,7 @@ import { supabaseBrowser } from '@/lib/supabase';
 function LoginContent() {
   const router   = useRouter();
   const params   = useSearchParams();
-  const rawRedirect = params.get('redirect') ?? '/dashboard';
-  const redirect = decodeURIComponent(rawRedirect);
-  const autostart = params.get('autostart') === '1';
+  const redirect = params.get('redirect') ?? '/dashboard';
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -135,6 +133,7 @@ function LoginContent() {
     </main>
   );
 }
+
 
 export default function LoginPage() {
   return (

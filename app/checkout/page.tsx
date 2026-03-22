@@ -39,9 +39,18 @@ function CheckoutContent() {
         return;
       }
 
-      if (!res.ok) throw new Error('Checkout-Fehler');
+      if (!res.ok) {
+        // Echte Fehlermeldung aus API lesen
+        let msg = 'Checkout-Fehler';
+        try {
+          const d = await res.json();
+          msg = d.message ?? d.error ?? `Serverfehler (${res.status})`;
+        } catch { /* ignore parse error */ }
+        throw new Error(msg);
+      }
 
       const { checkout_url } = await res.json();
+      if (!checkout_url) throw new Error('Keine Checkout-URL erhalten.');
       window.location.href = checkout_url;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unbekannter Fehler');
@@ -113,7 +122,22 @@ function CheckoutContent() {
           ) : `${selectedTier?.name} für €${selectedTier?.price}/Monat →`}
         </button>
 
-        {error && <p className="text-red-400 text-sm text-center mt-3">{error}</p>}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 mt-2
+            text-red-400 text-sm flex items-start gap-2">
+            <span className="shrink-0">⚠️</span>
+            <div>
+              <p className="font-semibold mb-0.5">Checkout fehlgeschlagen</p>
+              <p className="text-red-400/80">{error}</p>
+              {error.includes('price') || error.includes('Price') || error.includes('500') ? (
+                <p className="text-red-400/60 text-xs mt-1">
+                  Stripe Price IDs fehlen in der Konfiguration. Bitte{' '}
+                  <a href="mailto:hallo@kiclear.ai" className="underline">Support kontaktieren</a>.
+                </p>
+              ) : null}
+            </div>
+          </div>
+        )}
 
         <p className="text-center text-xs text-white/25 mt-4">
           SEPA Lastschrift & Kreditkarte · Monatlich kündbar · Stripe Checkout
@@ -122,6 +146,7 @@ function CheckoutContent() {
     </main>
   );
 }
+
 
 export default function CheckoutPage() {
   return (
