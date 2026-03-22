@@ -1,9 +1,8 @@
 'use client'; // build: 2026-03-22
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 export default function LoginPage() {
-  const router   = useRouter();
   const params   = useSearchParams();
   const redirect = params.get('redirect') ?? '/dashboard';
 
@@ -17,45 +16,34 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
-    let didRedirect = false;
-
     try {
-      const { getSupabaseBrowser } = await import('@/lib/supabase');
-      const sb = getSupabaseBrowser();
+      // Server-seitiger Login → setzt HttpOnly Cookie direkt
+      const res = await fetch('/api/auth/login', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email, password }),
+        credentials: 'include', // wichtig: Cookies mitsenden
+      });
 
-      const { error: authError } = await sb.auth.signInWithPassword({ email, password });
+      const data = await res.json();
 
-      if (authError) {
-        const msg =
-          authError.message.includes('Invalid login credentials')
-            ? 'E-Mail oder Passwort falsch.'
-            : authError.message.includes('Email not confirmed')
-            ? 'Bitte bestätigen Sie zuerst Ihre E-Mail-Adresse (E-Mail-Postfach prüfen).'
-            : authError.message.includes('rate limit')
-            ? 'Zu viele Versuche. Bitte kurz warten.'
-            : `Fehler: ${authError.message}`;
-        setError(msg);
+      if (!res.ok) {
+        setError(data.error ?? 'Login fehlgeschlagen.');
         return;
       }
 
-      // Erfolg → redirect ohne router.refresh() der State killt
-      didRedirect = true;
-      // Checkout-Seite soll nach Login automatisch Stripe starten
+      // Erfolg – Cookie wurde serverseitig gesetzt
+      // Checkout bekommt autostart=1 damit Stripe sofort startet
       const dest = redirect.startsWith('/checkout')
         ? redirect + (redirect.includes('?') ? '&autostart=1' : '?autostart=1')
         : redirect;
+
       window.location.href = dest;
 
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? `Verbindungsfehler: ${err.message}`
-          : 'Verbindungsfehler. Bitte Seite neu laden.'
-      );
+    } catch {
+      setError('Verbindungsfehler. Bitte Seite neu laden.');
     } finally {
-      // setLoading(false) nur wenn kein Redirect passiert
-      // sonst flackert der Button kurz bevor die Seite wechselt
-      if (!didRedirect) setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -96,11 +84,10 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* Fehlermeldung – persistent bis nächster Submit */}
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3
               text-red-400 text-sm flex items-start gap-2">
-              <span className="shrink-0 mt-0.5">⚠️</span>
+              <span className="shrink-0">⚠️</span>
               <span>{error}</span>
             </div>
           )}

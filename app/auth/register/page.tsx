@@ -1,9 +1,8 @@
 'use client'; // build: 2026-03-22
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 export default function RegisterPage() {
-  const router   = useRouter();
   const params   = useSearchParams();
   const redirect = params.get('redirect') ?? '/dashboard';
 
@@ -13,67 +12,45 @@ export default function RegisterPage() {
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState('');
   const [registered, setRegistered] = useState(false);
+  const [regEmail,   setRegEmail]   = useState('');
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 8) { setError('Passwort muss mindestens 8 Zeichen haben.'); return; }
     setLoading(true);
     setError('');
-    let didRedirect = false;
 
     try {
-      const { getSupabaseBrowser } = await import('@/lib/supabase');
-      const sb = getSupabaseBrowser();
-
-      // emailRedirectTo: Supabase schickt Bestätigungs-E-Mail mit diesem Link
-      // Der Callback tauscht den Code gegen eine Session und setzt den Cookie
-      const redirectTarget = redirect.startsWith('/checkout')
-        ? redirect + (redirect.includes('?') ? '&autostart=1' : '?autostart=1')
-        : redirect;
-      const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTarget)}`;
-
-      const { data, error: authError } = await sb.auth.signUp({
-        email,
-        password,
-        options: {
-          data:             { company_name: company },
-          emailRedirectTo:  callbackUrl,
-        },
+      // Server-seitiger Signup → Cookie wird serverseitig gesetzt
+      const res = await fetch('/api/auth/register', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email, password, company_name: company, redirect }),
+        credentials: 'include',
       });
 
-      if (authError) {
-        setError(
-          authError.message.includes('already registered') || authError.message.includes('already been registered')
-            ? 'Diese E-Mail ist bereits registriert. Bitte einloggen.'
-            : `Fehler: ${authError.message}`
-        );
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error ?? 'Registrierung fehlgeschlagen.');
         return;
       }
 
-      // Profil mit Unternehmensname anlegen
-      if (data.user && company) {
-        await sb.from('profiles').upsert({ id: data.user.id, company_name: company });
-      }
-
-      // Wenn E-Mail-Bestätigung deaktiviert → Session sofort vorhanden
-      if (data.session) {
-        didRedirect = true;
-        // Session sofort vorhanden (E-Mail-Bestätigung deaktiviert)
+      if (data.has_session) {
+        // E-Mail-Bestätigung deaktiviert → direkt weiter
         const dest = redirect.startsWith('/checkout')
           ? redirect + (redirect.includes('?') ? '&autostart=1' : '?autostart=1')
           : redirect;
         window.location.href = dest;
       } else {
+        // E-Mail-Bestätigung erforderlich
+        setRegEmail(email);
         setRegistered(true);
       }
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? `Verbindungsfehler: ${err.message}`
-          : 'Verbindungsfehler. Bitte Seite neu laden.'
-      );
+    } catch {
+      setError('Verbindungsfehler. Bitte Seite neu laden.');
     } finally {
-      if (!didRedirect) setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -85,12 +62,10 @@ export default function RegisterPage() {
           <h1 className="text-2xl font-bold text-white mb-3">E-Mail bestätigen</h1>
           <p className="text-white/50 text-sm leading-relaxed max-w-sm mx-auto">
             Wir haben eine Bestätigungs-E-Mail an{' '}
-            <span className="text-white font-medium">{email}</span> gesendet.
+            <span className="text-white font-medium">{regEmail}</span> gesendet.
             Bitte klicken Sie auf den Link um Ihr Konto zu aktivieren.
           </p>
-          <p className="text-white/30 text-xs mt-4">
-            Keine E-Mail erhalten? Spam-Ordner prüfen.
-          </p>
+          <p className="text-white/30 text-xs mt-3">Keine E-Mail erhalten? Spam-Ordner prüfen.</p>
           <a href="/auth/login"
             className="inline-block text-brand-green hover:text-green-300 text-sm mt-6 transition-colors">
             Zum Login →
@@ -125,7 +100,6 @@ export default function RegisterPage() {
               placeholder="Mustermann GmbH"
             />
           </div>
-
           <div>
             <label className="block text-xs text-white/50 font-mono mb-2">E-Mail *</label>
             <input
@@ -138,7 +112,6 @@ export default function RegisterPage() {
               placeholder="name@unternehmen.de"
             />
           </div>
-
           <div>
             <label className="block text-xs text-white/50 font-mono mb-2">
               Passwort * <span className="text-white/25">(min. 8 Zeichen)</span>
@@ -157,7 +130,7 @@ export default function RegisterPage() {
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3
               text-red-400 text-sm flex items-start gap-2">
-              <span className="shrink-0 mt-0.5">⚠️</span>
+              <span className="shrink-0">⚠️</span>
               <span>{error}</span>
             </div>
           )}
@@ -175,8 +148,10 @@ export default function RegisterPage() {
               hover:bg-green-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed
               flex items-center justify-center gap-2"
           >
-            {loading && <span className="w-4 h-4 border-2 border-bg/30 border-t-bg rounded-full animate-spin" />}
-            {loading ? 'Konto wird erstellt…' : 'Konto erstellen →'}
+            {loading
+              ? <><span className="w-4 h-4 border-2 border-bg/30 border-t-bg rounded-full animate-spin" />Konto wird erstellt…</>
+              : 'Konto erstellen →'
+            }
           </button>
         </form>
 
