@@ -21,6 +21,7 @@ function RegisterContent() {
     if (password.length < 8) { setError('Passwort muss mindestens 8 Zeichen haben.'); return; }
     setLoading(true);
     setError('');
+    let didRedirect = false;
 
     try {
       const { getSupabaseBrowser } = await import('@/lib/supabase');
@@ -48,15 +49,19 @@ function RegisterContent() {
 
       // Wenn E-Mail-Bestätigung deaktiviert → Session sofort vorhanden
       if (data.session) {
-        router.push(redirect);
-        router.refresh();
+        didRedirect = true;
+        window.location.href = redirect;
       } else {
         setRegistered(true);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verbindungsfehler. Bitte Seite neu laden.');
+      setError(
+        err instanceof Error
+          ? `Verbindungsfehler: ${err.message}`
+          : 'Verbindungsfehler. Bitte Seite neu laden.'
+      );
     } finally {
-      setLoading(false);
+      if (!didRedirect) setLoading(false);
     }
   };
 
@@ -93,7 +98,7 @@ function RegisterContent() {
         <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Konto erstellen</h1>
         <p className="text-white/40 text-sm mb-8">Für den Zugang nach dem Checkout.</p>
 
-        <form onSubmit={handleRegister} className="flex flex-col gap-4">
+        <form onSubmit={handleRegister} className="flex flex-col gap-4" noValidate>
           <div>
             <label className="block text-xs text-white/50 font-mono mb-2">
               Unternehmensname <span className="text-white/25">(optional)</span>
@@ -138,8 +143,10 @@ function RegisterContent() {
           </div>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-red-400 text-sm">
-              {error}
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3
+              text-red-400 text-sm flex items-start gap-2">
+              <span className="shrink-0 mt-0.5">⚠️</span>
+              <span>{error}</span>
             </div>
           )}
 
