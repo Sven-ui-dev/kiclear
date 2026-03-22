@@ -6,6 +6,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 export async function middleware(req: NextRequest) {
+  const pathname = req.nextUrl.pathname;
+
+  // /api/auth/* aus Middleware ausschließen
+  if (pathname.startsWith('/api/auth/')) {
+    return NextResponse.next();
+  }
+
   const res = NextResponse.next();
 
   const supabase = createServerClient(
@@ -27,7 +34,12 @@ export async function middleware(req: NextRequest) {
   );
 
   // Session refreshen – setzt Cookie in Response
-  await supabase.auth.getUser();
+  // Middleware darf NIEMALS crashen
+  try {
+    await supabase.auth.getUser();
+  } catch {
+    // Im Fehlerfall weiterleiten
+  }
 
   return res;
 }
