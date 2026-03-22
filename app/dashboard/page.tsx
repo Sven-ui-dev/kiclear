@@ -3,7 +3,7 @@
 // kiclear.ai – Compliance Dashboard
 // ────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 interface Subscription {
   tier: string;
@@ -59,6 +59,8 @@ export default function DashboardPage() {
   const [genError,   setGenError]   = useState('');
   const [polling,    setPolling]    = useState<string | null>(null);
 
+  const searchParams = useSearchParams();
+
   useEffect(() => {
     (async () => {
       try {
@@ -67,6 +69,16 @@ export default function DashboardPage() {
         const { data } = await sb.auth.getUser();
         if (!data.user) { router.push('/auth/login'); return; }
         setUser({ email: data.user.email ?? '' });
+
+        // Nach Stripe-Checkout: Subscription sofort aus Stripe holen
+        // (Fallback falls Webhook noch nicht konfiguriert)
+        const sessionId = searchParams.get('session_id');
+        if (sessionId && searchParams.get('checkout') === 'success') {
+          await fetch(`/api/checkout/sync?session_id=${sessionId}`, {
+            credentials: 'include',
+          });
+        }
+
         loadData();
       } catch {
         router.push('/auth/login');
