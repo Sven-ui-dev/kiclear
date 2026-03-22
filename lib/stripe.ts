@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import type { SubscriptionTier } from '@/types';
 import { TIER_MAP, getTierFromPriceId } from '@/config/pricing';
 
+// Lazy initialization - Stripe SDK nutzt seine eigene kompatible Version
 let stripeInstance: Stripe | null = null;
 
 function getStripe(): Stripe {
@@ -9,8 +10,7 @@ function getStripe(): Stripe {
     if (!process.env.STRIPE_SECRET_KEY) {
       throw new Error('STRIPE_SECRET_KEY is not set');
     }
-    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY, {
-    });
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
   }
   return stripeInstance;
 }
