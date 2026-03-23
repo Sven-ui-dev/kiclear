@@ -80,13 +80,25 @@ export default function DashboardPage() {
           setUser({ email: session.user.email ?? '' });
         }
 
-        // Nach Stripe-Checkout: /api/checkout/complete hat die Subscription
-        // bereits in die DB geschrieben. loadData() holt sie direkt.
+        // Nach Stripe-Checkout: Subscription möglicherweise noch nicht in DB
+        // (Webhook braucht 1-3 Sek.) → mit Retry pollen
         if (searchParams.get('checkout') === 'success') {
-          console.log('[dashboard] checkout success, loading subscription...');
+          // Retry-Loop: Webhook braucht 1-3 Sek. bis Subscription in DB
+          const MAX = 8; const DELAY = 1500;
+          for (let i = 0; i < MAX; i++) {
+            await loadData();
+            // Prüfe ob Subscription jetzt in State ist via API
+            const check = await fetch('/api/subscription').then(r => r.json()).catch(() => ({}));
+            if (check.subscription) {
+              setSub(check.subscription);
+              console.log('[dashboard] sub nach', i+1, 'Versuchen geladen');
+              break;
+            }
+            if (i < MAX - 1) await new Promise(r => setTimeout(r, DELAY));
+          }
+        } else {
+          loadData();
         }
-
-        loadData();
       } catch {
         router.push('/auth/login');
       }
@@ -187,6 +199,24 @@ export default function DashboardPage() {
               <p className="text-white/50 text-sm">Wählen Sie einen Plan um Ihr Nachweispaket zu generieren.</p>
             </div>
             <a href="/checkout" className="shrink-0 bg-brand-green text-bg font-bold px-5 py-2.5 rounded-xl hover:bg-green-300 transition-colors text-sm">Plan wählen →</a>
+          </div>
+        )}
+
+        {/* Checkout-Erfolg Banner */}
+        {searchParams.get('checkout') === 'success' && sub && (
+          <div className="bg-brand-green/5 border border-brand-green/20 rounded-2xl p-4 flex items-center justify-between gap-4">
+            <p className="text-brand-green text-sm">
+              ✓ Zahlung erfolgreich – Ihr <strong>{TIER_LABEL[searchParams.get('tier') ?? ''] ?? searchParams.get('tier')}</strong>-Abo ist jetzt aktiv.
+            </p>
+            <a href="/dashboard" className="text-xs text-brand-green/60 hover:text-brand-green transition-colors">✕</a>
+          </div>
+        )}
+
+        {/* Laden-Indikator wenn checkout=success und sub noch nicht da */}
+        {searchParams.get('checkout') === 'success' && !sub && !loading && (
+          <div className="bg-white/3 border border-white/7 rounded-2xl p-4 flex items-center gap-3">
+            <div className="w-4 h-4 border-2 border-brand-green/30 border-t-brand-green rounded-full animate-spin shrink-0" />
+            <p className="text-white/50 text-sm">Abo wird aktiviert… (kann einige Sekunden dauern)</p>
           </div>
         )}
 
