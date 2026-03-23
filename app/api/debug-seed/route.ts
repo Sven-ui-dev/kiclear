@@ -18,7 +18,7 @@ export async function POST() {
         user_id:               userId,
         answers:               { A1: 'yes', A2: 'DE', A3: 'DE', B1: 'yes', B2: 'no', C1: 'yes', D1: 'no', E1: 'yes' },
         score:                 65,
-        risk_class:            'MEDIUM',
+        risk_class:            'BEGRENZT',
         grade:                 'GELB',
         completed:             true,
         imported_from_kicheck: false,
