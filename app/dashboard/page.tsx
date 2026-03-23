@@ -88,7 +88,14 @@ export default function DashboardPage() {
           for (let i = 0; i < MAX; i++) {
             await loadData();
             // Prüfe ob Subscription jetzt in State ist via API
-            const check = await fetch('/api/subscription').then(r => r.json()).catch(() => ({}));
+            // Auth-Header inline holen
+            let authHdr: Record<string, string> = {};
+            try {
+              const { getSupabaseBrowser } = await import('@/lib/supabase');
+              const { data: { session: s2 } } = await getSupabaseBrowser().auth.getSession();
+              if (s2?.access_token) authHdr = { 'Authorization': `Bearer ${s2.access_token}` };
+            } catch { /* ignore */ }
+            const check = await fetch('/api/subscription', { headers: authHdr }).then(r => r.json()).catch(() => ({}));
             if (check.subscription) {
               setSub(check.subscription);
               console.log('[dashboard] sub nach', i+1, 'Versuchen geladen');

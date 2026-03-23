@@ -47,10 +47,28 @@ export async function parseBody<T>(
   }
 }
 
-export async function requireAuth(): Promise<{ user: { id: string; email: string } } | { user: null; response: Response }> {
+export async function requireAuth(req?: NextRequest): Promise<{ user: { id: string; email: string } } | { user: null; response: Response }> {
+  // 1. Cookie-basierte Session (Server-Side)
   const cookieStore = cookies();
   const supabase = createSupabaseServer(cookieStore);
   const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return { user: null, response: E.unauthorized() };
-  return { user: { id: user.id, email: user.email! } };
+  if (user && !error) return { user: { id: user.id, email: user.email! } };
+
+  // 2. Bearer-Token aus Authorization Header (Client-Side setSession)
+  const authHeader = req?.headers.get('authorization') ?? '';
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const { createClient } = await import('@supabase/supabase-js');
+    const client = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false } }
+    );
+    const { data: { user: tokenUser }, error: tokenError } = await client.auth.getUser(token);
+    if (tokenUser && !tokenError) {
+      return { user: { id: tokenUser.id, email: tokenUser.email! } };
+    }
+  }
+
+  return { user: null, response: E.unauthorized() };
 }
