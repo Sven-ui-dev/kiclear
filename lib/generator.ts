@@ -1,17 +1,27 @@
+// build: 2026-03-23-v34
 // ────────────────────────────────────────────────────────────────────────────
 // kiclear.ai – Dokument-Generierungs-Engine (Claude API)
-// Core of kiclear.ai – parallel document generation via Claude Sonnet
+// Mit Retry-Logik für transiente Anthropic 500-Fehler
 // ────────────────────────────────────────────────────────────────────────────
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { DocumentType, GenerationContext } from '@/types';
 import { SYSTEM_PROMPT, buildUserPrompt, DOCUMENT_META } from '@/config/documents';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// Lazy-Init wie bei Stripe – kein Crash bei fehlendem Key beim Modul-Import
+let _anthropic: Anthropic | null = null;
+function getAnthropic(): Anthropic {
+  if (!_anthropic) {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) throw new Error('ANTHROPIC_API_KEY ist nicht konfiguriert.');
+    _anthropic = new Anthropic({ apiKey: key });
+  }
+  return _anthropic;
+}
 
 const MODEL           = 'claude-sonnet-4-20250514';
 const MAX_TOKENS      = 2000;
-const MAX_CONCURRENCY = 5; // Max parallel API calls to avoid rate limits
+const MAX_CONCURRENCY = 3; // Reduziert von 5 auf 3 – weniger parallele Calls, weniger 500er
 
 // ── Result type ───────────────────────────────────────────────────────────────
 export interface GeneratedDoc {
@@ -21,7 +31,44 @@ export interface GeneratedDoc {
   error?:   string;
 }
 
-// ── Generate a single document ────────────────────────────────────────────────
+// ── Retry-Helper für transiente API-Fehler ────────────────────────────────────
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseDelayMs = 1000
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const msg = lastError.message;
+
+      // Nur bei transienten Fehlern retrien (5xx, overloaded, timeout)
+      const isTransient =
+        msg.includes('500') ||
+        msg.includes('529') ||
+        msg.includes('overloaded') ||
+        msg.includes('api_error') ||
+        msg.includes('timeout') ||
+        msg.includes('unknown error');
+
+      if (!isTransient || attempt === maxAttempts) {
+        throw lastError;
+      }
+
+      const delay = baseDelayMs * Math.pow(2, attempt - 1); // exponential backoff
+      console.log(`[Generator] Attempt ${attempt} failed (${msg.slice(0, 60)}), retry in ${delay}ms`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+
+  throw lastError ?? new Error('Max retries exceeded');
+}
+
+// ── Generate a single document (with retry) ───────────────────────────────────
 export async function generateDocument(
   docType: DocumentType,
   ctx: GenerationContext
@@ -29,12 +76,14 @@ export async function generateDocument(
   try {
     const userPrompt = buildUserPrompt(docType, ctx);
 
-    const message = await anthropic.messages.create({
-      model:      MODEL,
-      max_tokens: MAX_TOKENS,
-      system:     SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userPrompt }],
-    });
+    const message = await withRetry(() =>
+      getAnthropic().messages.create({
+        model:      MODEL,
+        max_tokens: MAX_TOKENS,
+        system:     SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userPrompt }],
+      })
+    );
 
     const content = message.content
       .filter(b => b.type === 'text')
@@ -48,12 +97,12 @@ export async function generateDocument(
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unbekannter Fehler';
-    console.error(`[Generator] Failed to generate ${docType}:`, msg);
+    console.error(`[Generator] Failed after retries ${docType}:`, msg);
     return { docType, content: '', tokens: 0, error: msg };
   }
 }
 
-// ── Generate all documents in parallel (with concurrency limit) ───────────────
+// ── Generate all documents with concurrency limit ────────────────────────────
 export async function generateBundle(
   docTypes: DocumentType[],
   ctx: GenerationContext,
@@ -62,7 +111,7 @@ export async function generateBundle(
   const results: GeneratedDoc[] = [];
   let done = 0;
 
-  // Process in batches of MAX_CONCURRENCY
+  // Batches mit reduzierter Concurrency (3 statt 5)
   for (let i = 0; i < docTypes.length; i += MAX_CONCURRENCY) {
     const batch = docTypes.slice(i, i + MAX_CONCURRENCY);
 
@@ -75,6 +124,11 @@ export async function generateBundle(
       done++;
       onProgress?.(done, docTypes.length, result.docType);
     }
+
+    // Kurze Pause zwischen Batches um Rate-Limits zu vermeiden
+    if (i + MAX_CONCURRENCY < docTypes.length) {
+      await new Promise(r => setTimeout(r, 500));
+    }
   }
 
   return results;
@@ -82,18 +136,11 @@ export async function generateBundle(
 
 // ── Cost estimation ───────────────────────────────────────────────────────────
 export function estimateCost(docCount: number): { eur: number; tokens: number } {
-  // ~1000 input + ~2000 output tokens per doc
   const tokensPerDoc = 3000;
   const totalTokens  = docCount * tokensPerDoc;
-
-  // Claude Sonnet pricing (approximate, check current rates)
-  const inputPricePerMToken  = 3.0;  // USD per million tokens
-  const outputPricePerMToken = 15.0; // USD per million tokens
-  const inputCost  = (docCount * 1000 / 1_000_000) * inputPricePerMToken;
-  const outputCost = (docCount * 2000 / 1_000_000) * outputPricePerMToken;
-  const usd = inputCost + outputCost;
-  const eur = usd * 0.92; // approximate EUR conversion
-
+  const inputCost    = (docCount * 1000 / 1_000_000) * 3.0;
+  const outputCost   = (docCount * 2000 / 1_000_000) * 15.0;
+  const eur          = (inputCost + outputCost) * 0.92;
   return { eur: Math.round(eur * 100) / 100, tokens: totalTokens };
 }
 
@@ -104,7 +151,7 @@ export function formatDocumentContent(
   companyName: string,
   generatedAt: Date
 ): string {
-  const meta = DOCUMENT_META[docType];
+  const meta    = DOCUMENT_META[docType];
   const dateStr = generatedAt.toLocaleDateString('de-DE', {
     year: 'numeric', month: 'long', day: 'numeric'
   });

@@ -1,4 +1,5 @@
 // POST /api/generate – Start document generation job
+export const dynamic = 'force-dynamic';
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { parseBody, E, requireAuth } from '@/lib/api-helpers';
@@ -19,7 +20,7 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const auth = await requireAuth();
+  const auth = await requireAuth(req);
   if (!auth.user) return (auth as { user: null; response: Response }).response;
 
   const { data, error } = await parseBody(req, schema);

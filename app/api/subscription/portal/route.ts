@@ -1,4 +1,5 @@
 // POST /api/subscription/portal – Stripe Kundenportal öffnen
+export const dynamic = 'force-dynamic';
 import { NextRequest } from 'next/server';
 import { E, requireAuth } from '@/lib/api-helpers';
 import { supabaseAdmin } from '@/lib/supabase';
