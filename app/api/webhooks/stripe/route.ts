@@ -1,8 +1,14 @@
 // POST /api/webhooks/stripe – Stripe Webhook Handler
 import { NextRequest } from 'next/server';
-import { stripe, constructWebhookEvent, getTierFromSubscription } from '@/lib/stripe';
+import { getStripe, constructWebhookEvent, getTierFromSubscription } from '@/lib/stripe';
 import { supabaseAdmin } from '@/lib/supabase';
 import type Stripe from 'stripe';
+
+function tsToIso(ts: unknown): string {
+  const num = typeof ts === 'number' ? ts : Number(ts);
+  if (!num || isNaN(num)) throw new Error(`Ungültiger Timestamp: ${ts}`);
+  return new Date(num * 1000).toISOString();
+}
 
 export async function POST(req: NextRequest) {
   const body      = await req.text();
@@ -30,9 +36,9 @@ export async function POST(req: NextRequest) {
         const stripeCustomer = session.customer as string;
         if (!userId || !stripeSubId) break;
 
-        const stripeSub = await stripe.subscriptions.retrieve(stripeSubId);
-        const periodStart = new Date((stripeSub as unknown as { current_period_start: number }).current_period_start * 1000).toISOString();
-        const periodEnd   = new Date((stripeSub as unknown as { current_period_end: number }).current_period_end * 1000).toISOString();
+        const stripeSub = await getStripe().subscriptions.retrieve(stripeSubId) as unknown as { current_period_start: number; current_period_end: number; status: string; cancel_at_period_end: boolean };
+        const periodStart = tsToIso(stripeSub.current_period_start);
+        const periodEnd   = tsToIso(stripeSub.current_period_end);
 
         await supabaseAdmin.from('subscriptions').upsert({
           user_id:                userId,
