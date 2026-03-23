@@ -110,7 +110,8 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!polling) return;
     const iv = setInterval(async () => {
-      const res = await fetch('/api/documents?type=bundles');
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/documents?type=bundles', { headers });
       if (!res.ok) return;
       const { bundles: fresh } = await res.json();
       setBundles(fresh ?? []);
@@ -151,12 +152,17 @@ export default function DashboardPage() {
     if (!assessment) return;
     setGenerating(true); setGenError('');
     try {
+      const authHdr = await getAuthHeaders();
       const res = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...authHdr, 'Content-Type': 'application/json' },
         body: JSON.stringify({ assessment_id: assessment.id }),
       });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message ?? 'Fehler'); }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as Record<string,unknown>;
+        const errObj = d?.error as Record<string,unknown> | undefined;
+        throw new Error((errObj?.message as string) ?? (d?.message as string) ?? 'Fehler');
+      }
       const { bundle_id } = await res.json();
       setPolling(bundle_id);
       await loadData();
