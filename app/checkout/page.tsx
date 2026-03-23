@@ -16,7 +16,10 @@ export default function CheckoutPage() {
 
   // Auto-trigger nach Redirect von Login/Register
   useEffect(() => {
-    if (autostart) handleCheckout();
+    if (!autostart) return;
+    // Kurze Wartezeit damit setSession() aus Login-Page propagiert
+    const t = setTimeout(() => handleCheckout(), 600);
+    return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autostart]);
 
@@ -32,7 +35,13 @@ export default function CheckoutPage() {
       });
 
       if (res.status === 401) {
-        // Not logged in – go to register first, encode the full redirect URL
+        if (autostart) {
+          // autostart aber 401: Session noch nicht bereit, nochmal versuchen
+          setLoading(false);
+          setError('Session noch nicht bereit – bitte Button klicken.');
+          return;
+        }
+        // Manueller Klick, nicht eingeloggt → zu Register
         const redirectTarget = `/checkout?tier=${tier}${transferToken ? `&transfer=${transferToken}` : ''}`;
         window.location.href = `/auth/register?redirect=${encodeURIComponent(redirectTarget)}`;
         return;

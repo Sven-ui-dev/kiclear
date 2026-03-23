@@ -1,9 +1,10 @@
-'use client'; // build: 2026-03-22
+'use client'; // build: 2026-03-23-v35
 // ────────────────────────────────────────────────────────────────────────────
 // kiclear.ai – Compliance Dashboard
 // ────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { AssessmentImport } from '@/components/dashboard/AssessmentImport';
 
 interface Subscription {
   tier: string;
@@ -88,14 +89,7 @@ export default function DashboardPage() {
           for (let i = 0; i < MAX; i++) {
             await loadData();
             // Prüfe ob Subscription jetzt in State ist via API
-            // Auth-Header inline holen
-            let authHdr: Record<string, string> = {};
-            try {
-              const { getSupabaseBrowser } = await import('@/lib/supabase');
-              const { data: { session: s2 } } = await getSupabaseBrowser().auth.getSession();
-              if (s2?.access_token) authHdr = { 'Authorization': `Bearer ${s2.access_token}` };
-            } catch { /* ignore */ }
-            const check = await fetch('/api/subscription', { headers: authHdr }).then(r => r.json()).catch(() => ({}));
+            const check = await fetch('/api/subscription').then(r => r.json()).catch(() => ({}));
             if (check.subscription) {
               setSub(check.subscription);
               console.log('[dashboard] sub nach', i+1, 'Versuchen geladen');
@@ -126,12 +120,22 @@ export default function DashboardPage() {
     return () => clearInterval(iv);
   }, [polling]);
 
+  const getAuthHeaders = async (): Promise<Record<string, string>> => {
+    try {
+      const { getSupabaseBrowser } = await import('@/lib/supabase');
+      const { data: { session } } = await getSupabaseBrowser().auth.getSession();
+      if (session?.access_token) return { 'Authorization': `Bearer ${session.access_token}` };
+    } catch { /* ignore */ }
+    return {};
+  };
+
   const loadData = async () => {
     try {
+      const headers = await getAuthHeaders();
       const [s, b, a] = await Promise.all([
-        fetch('/api/subscription'),
-        fetch('/api/documents?type=bundles'),
-        fetch('/api/documents?type=assessment'),
+        fetch('/api/subscription',              { headers }),
+        fetch('/api/documents?type=bundles',    { headers }),
+        fetch('/api/documents?type=assessment', { headers }),
       ]);
       if (s.status === 401) { router.push('/auth/login'); return; }
       const sd = s.ok ? await s.json() : {};
@@ -270,13 +274,7 @@ export default function DashboardPage() {
                 <a href="https://kicheck.ai/check" target="_blank" rel="noopener noreferrer" className="text-xs text-white/30 hover:text-white/50 transition-colors">Assessment aktualisieren →</a>
               </div>
             ) : (
-              <div>
-                <p className="text-white/40 text-sm mb-4">Noch kein abgeschlossenes Assessment.</p>
-                <a href="https://kicheck.ai/check" target="_blank" rel="noopener noreferrer"
-                  className="inline-block bg-brand-green/10 border border-brand-green/20 text-brand-green text-xs font-semibold px-4 py-2 rounded-lg hover:bg-brand-green/20 transition-colors">
-                  Kostenloser Check auf kicheck.ai →
-                </a>
-              </div>
+              <AssessmentImport onImported={loadData} />
             )}
           </div>
 
