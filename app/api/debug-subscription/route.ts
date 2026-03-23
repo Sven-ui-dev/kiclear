@@ -7,7 +7,7 @@ export async function GET() {
   const { data: subs }        = await supabaseAdmin.from('subscriptions').select('*').order('created_at', { ascending: false }).limit(5);
   const { data: assessments } = await supabaseAdmin.from('assessments').select('*').order('created_at', { ascending: false }).limit(5);
   const { data: bundles }     = await supabaseAdmin.from('document_bundles').select('*').order('created_at', { ascending: false }).limit(5);
-  const { data: documents }   = await supabaseAdmin.from('documents').select('id, bundle_id, doc_type, status, created_at').order('created_at', { ascending: false }).limit(10);
+  const { data: documents }   = await supabaseAdmin.from('documents').select('id, bundle_id, doc_type, status, content_raw, created_at').order('created_at', { ascending: false }).limit(10);
   return Response.json({ subscriptions: subs ?? [], assessments: assessments ?? [], document_bundles: bundles ?? [], documents: documents ?? [] });
 }
 
@@ -40,3 +40,5 @@ export async function POST(req: NextRequest) {
 }
 
 // GET /api/debug-subscription?user_id=xxx – direkte DB-Abfrage für einen User
+
+// GET mit ?detail=1 zeigt document content_raw

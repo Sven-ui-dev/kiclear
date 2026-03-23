@@ -7,6 +7,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { classify } from '@/lib/classifier';
 import { determineRequiredDocuments } from '@/config/documents';
 import { generateBundle, formatDocumentContent } from '@/lib/generator';
+import { DOCUMENT_META } from '@/config/documents';
 import { uploadDocumentMarkdown, uploadBundle, getSignedUrl } from '@/lib/storage';
 import type { AssessmentAnswers, GenerationContext, DocumentType } from '@/types';
 import archiver from 'archiver';
@@ -141,6 +142,13 @@ export async function POST(req: NextRequest) {
     }
 
     // 7. Create ZIP bundle
+    const successDocs = generated.filter(g => !g.error && g.content);
+    const failedDocs  = generated.filter(g => g.error || !g.content);
+    console.log('[Generate] Docs OK:', successDocs.length, 'Failed:', failedDocs.length);
+    if (failedDocs.length > 0) {
+      console.error('[Generate] Failed docs:', failedDocs.map(g => `${g.docType}: ${g.error}`).join(', '));
+    }
+
     const zipBuffer = await createZipBundle(generated, ctx, now, bundleVersion);
     const zipPath = await uploadBundle(auth.user.id, bundle.id, zipBuffer, bundleVersion);
     const zipUrl = await getSignedUrl(zipPath);
@@ -182,7 +190,7 @@ export async function POST(req: NextRequest) {
 
 // ── Create ZIP from generated documents ──────────────────────────────────────
 async function createZipBundle(
-  generated: Array<{ docType: DocumentType; content: string; error?: string }>,
+  generated: Array<{ docType: DocumentType; content: string; tokens: number; error?: string }>,
   ctx: GenerationContext,
   generatedAt: Date,
   version: number
@@ -204,10 +212,10 @@ async function createZipBundle(
     // Documents
     for (const gen of generated) {
       if (!gen.error && gen.content) {
-        const { formatDocumentContent, DOCUMENT_META } = require('@/config/documents');
         const content = formatDocumentContent(gen.docType, gen.content, ctx.companyName ?? 'Ihr Unternehmen', generatedAt);
-        const label = DOCUMENT_META[gen.docType]?.label?.replace(/[^a-zA-Z0-9äöüÄÖÜß\s-]/g, '') ?? gen.docType;
-        archive.append(Buffer.from(content, 'utf-8'), { name: `${gen.docType}_${label}.md` });
+        // Sicherer Dateiname
+        const safeDocType = gen.docType.replace(/[^a-zA-Z0-9_-]/g, '_');
+        archive.append(Buffer.from(content, 'utf-8'), { name: `${safeDocType}.md` });
       }
     }
 
