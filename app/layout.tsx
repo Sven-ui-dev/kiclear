@@ -1,22 +1,12 @@
 // build: 2026-03-22
 import type { Metadata } from 'next';
-import { Sora, Space_Mono } from 'next/font/google';
 import { Suspense } from 'react';
 import './globals.css';
 
-// next/font: selbst gehostet, kein Google-Request im Browser
-const sora = Sora({
-  subsets:  ['latin'],
-  weight:   ['300', '400', '600', '700', '800'],
-  variable: '--font-sora',
-  display:  'swap',
-});
-const spaceMono = Space_Mono({
-  subsets:  ['latin'],
-  weight:   ['400', '700'],
-  variable: '--font-space-mono',
-  display:  'swap',
-});
+// Fonts werden über globals.css geladen (system-safe fallback)
+// next/font/google benötigt Netzwerkzugang beim Build → robustere Lösung
+const sora      = { variable: '' };
+const spaceMono = { variable: '' };
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://kiclear.ai';
 
@@ -47,7 +37,7 @@ function LoadingFallback() {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="de" className={`${sora.variable} ${spaceMono.variable}`}>
+    <html lang="de" className="">
       <body className="bg-bg text-white antialiased">
         <Suspense fallback={<LoadingFallback />}>
           {children}
