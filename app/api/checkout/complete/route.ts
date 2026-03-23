@@ -1,10 +1,8 @@
-// build: 2026-03-22
+// build: 2026-03-22-v25
 // GET /api/checkout/complete?session_id=cs_xxx&tier=xxx
 // Stripe redirectet hierher nach erfolgreichem Checkout.
-// Diese Route synct die Subscription und redirectet dann zum Dashboard.
+// Kein Auth-Check nötig – user_id kommt aus Stripe-Metadaten (tamper-proof).
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createSupabaseServer } from '@/lib/supabase';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getStripe } from '@/lib/stripe';
 
@@ -14,18 +12,7 @@ export async function GET(req: NextRequest) {
   const tier      = searchParams.get('tier') ?? 'starter';
 
   if (!sessionId) {
-    return NextResponse.redirect(new URL('/dashboard?checkout=error&reason=no_session', origin));
-  }
-
-  // Auth prüfen
-  const cookieStore = cookies();
-  const supabase    = createSupabaseServer(cookieStore);
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    // Nicht eingeloggt – zum Login mit Redirect zurück
-    const dest = `/auth/login?redirect=${encodeURIComponent(`/api/checkout/complete?session_id=${sessionId}&tier=${tier}`)}`;
-    return NextResponse.redirect(new URL(dest, origin));
+    return NextResponse.redirect(new URL('/dashboard?checkout=error&reason=no_session_id', origin));
   }
 
   try {
@@ -35,29 +22,35 @@ export async function GET(req: NextRequest) {
     });
 
     if (session.mode !== 'subscription' || !session.subscription) {
-      return NextResponse.redirect(new URL('/dashboard?checkout=error&reason=invalid_session', origin));
+      return NextResponse.redirect(new URL('/dashboard?checkout=error&reason=not_subscription', origin));
     }
 
-    // Sicherheit: user_id aus Metadata muss übereinstimmen
-    const metaUserId = session.metadata?.user_id;
-    if (metaUserId && metaUserId !== user.id) {
-      return NextResponse.redirect(new URL('/dashboard?checkout=error&reason=user_mismatch', origin));
+    // user_id aus Stripe-Metadaten – wurde beim Checkout-Erstellen gesetzt
+    // Stripe-Metadaten sind server-seitig gesetzt → nicht manipulierbar
+    const userId = session.metadata?.user_id;
+    if (!userId) {
+      console.error('[checkout/complete] No user_id in session metadata:', sessionId);
+      return NextResponse.redirect(new URL('/dashboard?checkout=error&reason=no_user_id', origin));
     }
 
     const sub = session.subscription as unknown as {
-      id: string; status: string;
-      current_period_start: number; current_period_end: number;
+      id: string;
+      status: string;
+      current_period_start: number;
+      current_period_end: number;
       cancel_at_period_end: boolean;
     };
 
-    // Subscription in DB schreiben
+    const actualTier = session.metadata?.tier ?? tier;
+
+    // Subscription in DB schreiben (kein Auth nötig – supabaseAdmin bypassed RLS)
     const { error: dbError } = await supabaseAdmin
       .from('subscriptions')
       .upsert({
-        user_id:                user.id,
+        user_id:                userId,
         stripe_subscription_id: sub.id,
         stripe_customer_id:     session.customer as string,
-        tier:                   session.metadata?.tier ?? tier,
+        tier:                   actualTier,
         status:                 sub.status,
         current_period_start:   new Date(sub.current_period_start * 1000).toISOString(),
         current_period_end:     new Date(sub.current_period_end * 1000).toISOString(),
@@ -65,39 +58,53 @@ export async function GET(req: NextRequest) {
       }, { onConflict: 'stripe_subscription_id' });
 
     if (dbError) {
-      console.error('[checkout/complete] DB upsert error:', dbError);
-      return NextResponse.redirect(new URL(`/dashboard?checkout=error&reason=db_error`, origin));
+      console.error('[checkout/complete] DB error:', dbError.message);
+      return NextResponse.redirect(
+        new URL(`/dashboard?checkout=error&reason=${encodeURIComponent(dbError.message)}`, origin)
+      );
     }
 
-    console.log('[checkout/complete] Success for user:', user.id, 'tier:', tier);
+    console.log('[checkout/complete] ✓ Subscription gespeichert:', {
+      userId, tier: actualTier, subId: sub.id, status: sub.status
+    });
 
-    // kicheck Transfer-Token
+    // kicheck Transfer-Token verarbeiten
     const transferToken = session.metadata?.transfer_token;
     if (transferToken) {
-      const KICHECK_URL = process.env.NEXT_PUBLIC_KICHECK_URL ?? 'https://kicheck.ai';
       try {
-        const res = await fetch(`${KICHECK_URL}/api/check/session-from-token/${transferToken}`, {
-          headers: { 'x-transfer-secret': process.env.KICHECK_TRANSFER_SECRET ?? '' },
-        });
+        const KICHECK_URL = process.env.NEXT_PUBLIC_KICHECK_URL ?? 'https://kicheck.ai';
+        const res = await fetch(
+          `${KICHECK_URL}/api/check/session-from-token/${transferToken}`,
+          { headers: { 'x-transfer-secret': process.env.KICHECK_TRANSFER_SECRET ?? '' } }
+        );
         if (res.ok) {
           const { answers_json, score, risk_class } = await res.json();
           await supabaseAdmin.from('assessments').insert({
-            user_id: user.id, answers: answers_json,
-            score, risk_class, completed: true,
-            imported_from_kicheck: true, kicheck_session_id: transferToken,
+            user_id:               userId,
+            answers:               answers_json,
+            score,
+            risk_class,
+            completed:             true,
+            imported_from_kicheck: true,
+            kicheck_session_id:    transferToken,
           });
+          console.log('[checkout/complete] ✓ kicheck Assessment importiert');
         }
-      } catch { /* ignore */ }
+      } catch (e) {
+        console.error('[checkout/complete] kicheck import error:', e);
+      }
     }
 
-    // Erfolg: zum Dashboard redirecten
+    // Erfolg → Dashboard
     return NextResponse.redirect(
-      new URL(`/dashboard?checkout=success&tier=${tier}`, origin)
+      new URL(`/dashboard?checkout=success&tier=${actualTier}`, origin)
     );
 
   } catch (e) {
-    console.error('[checkout/complete] Error:', e);
-    const msg = encodeURIComponent(e instanceof Error ? e.message : 'unknown');
-    return NextResponse.redirect(new URL(`/dashboard?checkout=error&reason=${msg}`, origin));
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[checkout/complete] Error:', msg);
+    return NextResponse.redirect(
+      new URL(`/dashboard?checkout=error&reason=${encodeURIComponent(msg)}`, origin)
+    );
   }
 }

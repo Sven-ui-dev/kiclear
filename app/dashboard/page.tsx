@@ -80,21 +80,10 @@ export default function DashboardPage() {
           setUser({ email: session.user.email ?? '' });
         }
 
-        // Nach Stripe-Checkout: Subscription sofort aus Stripe holen
-        const sessionId = searchParams.get('session_id');
-        if (sessionId && searchParams.get('checkout') === 'success') {
-          try {
-            const syncRes = await fetch(`/api/checkout/sync?session_id=${sessionId}`, {
-              credentials: 'include',
-            });
-            const syncData = await syncRes.json();
-            console.log('[dashboard] sync result:', syncData);
-            if (!syncRes.ok) {
-              console.error('[dashboard] sync error:', syncData);
-            }
-          } catch (syncErr) {
-            console.error('[dashboard] sync fetch error:', syncErr);
-          }
+        // Nach Stripe-Checkout: /api/checkout/complete hat die Subscription
+        // bereits in die DB geschrieben. loadData() holt sie direkt.
+        if (searchParams.get('checkout') === 'success') {
+          console.log('[dashboard] checkout success, loading subscription...');
         }
 
         loadData();
