@@ -1,9 +1,8 @@
 'use client'; // build: 2026-03-22
-import { Suspense } from 'react';
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-function LoginContent() {
+export default function LoginPage() {
   const params   = useSearchParams();
   const redirect = params.get('redirect') ?? '/dashboard';
 
@@ -117,14 +116,5 @@ function LoginContent() {
         </p>
       </div>
     </main>
-  );
-}
-
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className='min-h-screen bg-bg flex items-center justify-center'><span className='text-white/50'>Laden...</span></div>}>
-      <LoginContent />
-    </Suspense>
   );
 }
