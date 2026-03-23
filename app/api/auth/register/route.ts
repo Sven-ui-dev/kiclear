@@ -1,5 +1,6 @@
 // build: 2026-03-22-v24
 // POST /api/auth/register
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '@/lib/supabase';

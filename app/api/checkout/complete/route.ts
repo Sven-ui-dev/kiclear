@@ -2,6 +2,7 @@
 // GET /api/checkout/complete?session_id=cs_xxx&tier=xxx
 // Stripe redirectet hierher nach erfolgreichem Checkout.
 // Kein Auth-Check nötig – user_id kommt aus Stripe-Metadaten (tamper-proof).
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getStripe } from '@/lib/stripe';

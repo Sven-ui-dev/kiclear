@@ -2,6 +2,7 @@
 // POST /api/auth/login
 // Gibt Session-Tokens zurück damit der Client sie selbst setzen kann.
 // Hybrid-Ansatz: Server validiert, Client setzt Session.
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';

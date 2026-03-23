@@ -2,6 +2,7 @@
 // GET /api/checkout/sync?session_id=cs_xxx
 // Fallback falls Stripe-Webhook nicht konfiguriert ist.
 // Holt Subscription direkt aus Stripe nach erfolgreichem Checkout.
+export const dynamic = 'force-dynamic';
 import { NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/api-helpers';
 import { supabaseAdmin } from '@/lib/supabase';
