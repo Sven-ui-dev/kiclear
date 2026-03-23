@@ -1,8 +1,8 @@
 // build: 2026-03-22
-// POST /api/auth/register – Serverseitige Registrierung
-import { NextRequest } from 'next/server';
-import { cookies } from 'next/headers';
-import { createSupabaseServer, supabaseAdmin } from '@/lib/supabase';
+// POST /api/auth/register – Serverseitige Registrierung mit Cookie-Setzung
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { supabaseAdmin } from '@/lib/supabase';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const body   = await req.json();
     const result = schema.safeParse(body);
     if (!result.success) {
-      return Response.json({ error: 'Ungültige Eingabe.' }, { status: 400 });
+      return NextResponse.json({ error: 'Ungültige Eingabe.' }, { status: 400 });
     }
 
     const { email, password, company_name, redirect } = result.data;
@@ -28,8 +28,28 @@ export async function POST(req: NextRequest) {
       : (redirect ?? '/dashboard');
     const callbackUrl = `${origin}/auth/callback?next=${encodeURIComponent(dest)}`;
 
-    const cookieStore = cookies();
-    const supabase    = createSupabaseServer(cookieStore);
+    const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+    // Response VOR Supabase-Call erstellen
+    const response = NextResponse.json({ ok: true, has_session: false, requires_confirmation: true, email });
+
+    const supabase = createServerClient(supabaseUrl, supabaseAnon, {
+      cookies: {
+        getAll: () => req.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, {
+              ...options,
+              httpOnly: true,
+              secure:   process.env.NODE_ENV === 'production',
+              sameSite: 'lax',
+              path:     '/',
+            });
+          });
+        },
+      },
+    });
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -41,27 +61,45 @@ export async function POST(req: NextRequest) {
     });
 
     if (error) {
-      return Response.json({
-        error: error.message.includes('already registered')
-          ? 'Diese E-Mail ist bereits registriert.'
-          : error.message,
-      }, { status: 400 });
+      const msg = error.message.includes('already registered')
+        ? 'Diese E-Mail ist bereits registriert.'
+        : error.message;
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
 
+    // Profil anlegen
     if (data.user && company_name) {
-      await supabaseAdmin
-        .from('profiles')
-        .upsert({ id: data.user.id, company_name });
+      await supabaseAdmin.from('profiles').upsert({ id: data.user.id, company_name });
     }
 
-    return Response.json({
+    const hasSession = !!data.session;
+
+    console.log('[/api/auth/register] OK für:', email,
+      '| Session:', hasSession,
+      '| Cookies:', response.cookies.getAll().map(c => c.name));
+
+    // Body aktualisieren
+    const finalResponse = NextResponse.json({
       ok:                    true,
-      has_session:           !!data.session,
-      requires_confirmation: !data.session,
+      has_session:           hasSession,
+      requires_confirmation: !hasSession,
       email,
     });
+
+    // Cookies aus response übertragen
+    response.cookies.getAll().forEach(c => {
+      finalResponse.cookies.set(c.name, c.value, {
+        httpOnly: true,
+        secure:   process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path:     '/',
+      });
+    });
+
+    return finalResponse;
+
   } catch (e) {
     console.error('[/api/auth/register]', e);
-    return Response.json({ error: 'Serverfehler.' }, { status: 500 });
+    return NextResponse.json({ error: 'Serverfehler.' }, { status: 500 });
   }
 }
