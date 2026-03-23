@@ -1,4 +1,4 @@
-'use client'; // build: 2026-03-22
+'use client'; // build: 2026-03-22-v24
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
@@ -10,19 +10,21 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
+  const [status,   setStatus]   = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setStatus('');
 
     try {
-      // Server-seitiger Login → setzt HttpOnly Cookie direkt
+      // 1. Server-seitiger Auth-Check
+      setStatus('Authentifizierung läuft…');
       const res = await fetch('/api/auth/login', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ email, password }),
-        credentials: 'include', // wichtig: Cookies mitsenden
       });
 
       const data = await res.json();
@@ -32,16 +34,34 @@ export default function LoginPage() {
         return;
       }
 
-      // Erfolg – Cookie wurde serverseitig gesetzt
-      // Checkout bekommt autostart=1 damit Stripe sofort startet
+      // 2. Session client-seitig setzen damit Supabase Browser-Client
+      //    und Server-Client dieselbe Session haben
+      setStatus('Session wird gesetzt…');
+      const { getSupabaseBrowser } = await import('@/lib/supabase');
+      const sb = getSupabaseBrowser();
+
+      const { error: sessionError } = await sb.auth.setSession({
+        access_token:  data.access_token,
+        refresh_token: data.refresh_token,
+      });
+
+      if (sessionError) {
+        console.error('[login] setSession error:', sessionError);
+        // Trotzdem versuchen weiterzuleiten - Session könnte partial sein
+      }
+
+      setStatus('Weiterleitung…');
+
       const dest = redirect.startsWith('/checkout')
         ? redirect + (redirect.includes('?') ? '&autostart=1' : '?autostart=1')
         : redirect;
 
+      // Kurze Pause damit Session propagiert
+      await new Promise(r => setTimeout(r, 200));
       window.location.href = dest;
 
-    } catch {
-      setError('Verbindungsfehler. Bitte Seite neu laden.');
+    } catch (err) {
+      setError(`Fehler: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setLoading(false);
     }
@@ -70,7 +90,6 @@ export default function LoginPage() {
               placeholder="name@unternehmen.de"
             />
           </div>
-
           <div>
             <label className="block text-xs text-white/50 font-mono mb-2">Passwort</label>
             <input
@@ -83,6 +102,13 @@ export default function LoginPage() {
               placeholder="••••••••"
             />
           </div>
+
+          {status && !error && (
+            <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2
+              text-white/50 text-xs font-mono">
+              {status}
+            </div>
+          )}
 
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3
@@ -99,7 +125,7 @@ export default function LoginPage() {
               flex items-center justify-center gap-2"
           >
             {loading
-              ? <><span className="w-4 h-4 border-2 border-bg/30 border-t-bg rounded-full animate-spin" />Einloggen…</>
+              ? <><span className="w-4 h-4 border-2 border-bg/30 border-t-bg rounded-full animate-spin" />{status || 'Einloggen…'}</>
               : 'Einloggen →'
             }
           </button>

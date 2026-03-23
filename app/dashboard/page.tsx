@@ -66,9 +66,19 @@ export default function DashboardPage() {
       try {
         const { getSupabaseBrowser } = await import('@/lib/supabase');
         const sb = getSupabaseBrowser();
-        const { data } = await sb.auth.getUser();
-        if (!data.user) { router.push('/auth/login'); return; }
-        setUser({ email: data.user.email ?? '' });
+
+        // getSession() liest aus localStorage (client-side)
+        // getUser() macht einen Server-Call - nutze getSession für lokale Prüfung
+        const { data: { session } } = await sb.auth.getSession();
+
+        if (!session) {
+          // Kein Client-Session → server-side check
+          const { data: { user } } = await sb.auth.getUser();
+          if (!user) { router.push('/auth/login'); return; }
+          setUser({ email: user.email ?? '' });
+        } else {
+          setUser({ email: session.user.email ?? '' });
+        }
 
         // Nach Stripe-Checkout: Subscription sofort aus Stripe holen
         const sessionId = searchParams.get('session_id');

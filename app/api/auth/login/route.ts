@@ -1,7 +1,9 @@
-// build: 2026-03-22
-// POST /api/auth/login – Serverseitiger Login mit Cookie-Setzung
+// build: 2026-03-22-v24
+// POST /api/auth/login
+// Gibt Session-Tokens zurück damit der Client sie selbst setzen kann.
+// Hybrid-Ansatz: Server validiert, Client setzt Session.
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -20,26 +22,9 @@ export async function POST(req: NextRequest) {
     const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-    // Response-Objekt VOR dem Supabase-Call erstellen
-    // damit setAll() die Cookies direkt in die Response schreiben kann
-    const response = NextResponse.json({ ok: true });
-
-    const supabase = createServerClient(supabaseUrl, supabaseAnon, {
-      cookies: {
-        getAll: () => req.cookies.getAll(),
-        setAll: (cookiesToSet) => {
-          // Cookies direkt in die Response schreiben
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, {
-              ...options,
-              httpOnly:  true,
-              secure:    process.env.NODE_ENV === 'production',
-              sameSite:  'lax',
-              path:      '/',
-            });
-          });
-        },
-      },
+    // Direkt mit supabase-js (keine SSR-Komplikationen)
+    const supabase = createClient(supabaseUrl, supabaseAnon, {
+      auth: { persistSession: false, autoRefreshToken: false },
     });
 
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -61,11 +46,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Keine Session erhalten.' }, { status: 401 });
     }
 
-    console.log('[/api/auth/login] OK für:', data.user?.email,
-      '| Cookies gesetzt:', response.cookies.getAll().map(c => c.name));
+    console.log('[/api/auth/login] OK:', data.user?.email);
 
-    // response hat bereits ok:true im Body + Cookies im Header
-    return response;
+    // Session-Tokens an den Client zurückgeben
+    // Client setzt sie dann mit supabase.auth.setSession()
+    return NextResponse.json({
+      ok:            true,
+      access_token:  data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      expires_at:    data.session.expires_at,
+      user: {
+        id:    data.user?.id,
+        email: data.user?.email,
+      },
+    });
 
   } catch (e) {
     console.error('[/api/auth/login]', e);

@@ -36,11 +36,19 @@ export default function RegisterPage() {
         return;
       }
 
-      if (data.has_session) {
-        // E-Mail-Bestätigung deaktiviert → direkt weiter
+      if (data.has_session && data.access_token) {
+        // Session sofort verfügbar → client-seitig setzen
+        const { getSupabaseBrowser } = await import('@/lib/supabase');
+        const sb = getSupabaseBrowser();
+        await sb.auth.setSession({
+          access_token:  data.access_token,
+          refresh_token: data.refresh_token,
+        });
+
         const dest = redirect.startsWith('/checkout')
           ? redirect + (redirect.includes('?') ? '&autostart=1' : '?autostart=1')
           : redirect;
+        await new Promise(r => setTimeout(r, 200));
         window.location.href = dest;
       } else {
         // E-Mail-Bestätigung erforderlich
