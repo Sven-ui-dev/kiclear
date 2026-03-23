@@ -1,34 +1,31 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700;800&family=Space+Mono:wght@400;700&display=swap');
 
-@theme {
-  --color-bg: #0A0F1E;
-  --color-bg-card: #111827;
-  --color-bg-card2: #161D2F;
-  --color-brand-green: #00E5A0;
-  --color-green-dim: #00B87D;
-  --color-navy: #0F2137;
-  --color-amber: #FFB800;
-  --color-red: #FF4757;
-  --color-blue: #4A9EFF;
-  --font-sans: var(--font-sora), system-ui, sans-serif;
-  --font-mono: var(--font-space-mono), monospace;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
+  font-family: 'Sora', system-ui, sans-serif;
   --bg:        #0A0F1E;
   --bg-card:   #111827;
   --bg-card2:  #161D2F;
+  --navy:      #0F2137;
   --green:     #00E5A0;
   --green-dim: #00B87D;
-  --navy:      #0F2137;
   --amber:     #FFB800;
   --red:       #FF4757;
   --border:    rgba(255,255,255,0.07);
 }
 
 html { scroll-behavior: smooth; }
-
 body {
   background: var(--bg);
-  font-family: var(--font-sora);
+  /* font via next/font CSS-Variablen */
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(0,229,160,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,160,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
 }
