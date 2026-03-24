@@ -86,9 +86,3 @@ export async function getSubscriptionTier(
   const priceId = sub.items.data[0]?.price.id;
   return priceId ? getTierFromPriceId(priceId) : null;
 }
-
-// ── Get tier from subscription object ─────────────────────────────────────────────
-export function getTierFromSubscription(sub: any): SubscriptionTier | null {
-  const priceId = sub.items?.data[0]?.price?.id;
-  return priceId ? getTierFromPriceId(priceId) : null;
-}

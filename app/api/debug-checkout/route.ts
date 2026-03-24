@@ -103,6 +103,45 @@ export async function GET() {
     steps.prices = { error: e instanceof Error ? e.message : String(e) };
   }
 
+  // 5. Checkout-Session Test (immer ausführen, unabhängig von Auth)
+  try {
+    const Stripe = (await import('stripe')).default;
+    const stripeKey = process.env.STRIPE_SECRET_KEY ?? '';
+    const stripe = new Stripe(stripeKey, {
+      apiVersion: '2024-06-20' as never,
+    });
+    const priceId = process.env.STRIPE_PRICE_STARTER ?? '';
+
+    if (!priceId) {
+      steps.checkout_test = { ok: false, error: 'STRIPE_PRICE_STARTER nicht gesetzt' };
+    } else {
+      const session = await stripe.checkout.sessions.create({
+        mode:           'subscription',
+        customer_email: 'test@debug.de',
+        line_items:     [{ price: priceId, quantity: 1 }],
+        success_url:    'https://kiclear.ai/dashboard',
+        cancel_url:     'https://kiclear.ai/checkout',
+        locale:         'de',
+      });
+      steps.checkout_test = {
+        ok:          true,
+        session_id:  session.id,
+        url_prefix:  (session.url ?? '').slice(0, 50) + '...',
+      };
+    }
+  } catch (e) {
+    const err = e as Record<string, unknown>;
+    steps.checkout_test = {
+      ok:          false,
+      error:       err?.message ?? String(e),
+      type:        err?.type ?? null,
+      code:        err?.code ?? null,
+      param:       err?.param ?? null,
+      status_code: err?.statusCode ?? null,
+      raw:         err?.raw ? JSON.stringify(err.raw).slice(0, 200) : null,
+    };
+  }
+
   // Gesamtstatus
   const authOk   = (steps.auth as Record<string, unknown>)?.ok === true;
   const stripeOk = (steps.stripe as Record<string, unknown>)?.ok === true;
