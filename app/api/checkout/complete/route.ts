@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
     }
 
     console.log('[checkout/complete] ✓ Subscription gespeichert:', {
-      userId, tier: actualTier, subId: sub.id, status: sub.status
+      userId, tier: actualTier, subId: subObj.id, status: subObj.status
     });
 
     // kicheck Transfer-Token verarbeiten
