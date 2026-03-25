@@ -39,15 +39,27 @@ export async function POST(req: NextRequest) {
 
   if (!assessment) return E.notFound('Assessment');
 
-  // 2. Check active subscription
+  // 2. Check active subscription (active or trialing both count)
   const { data: sub } = await supabaseAdmin
     .from('subscriptions')
     .select('*')
     .eq('user_id', auth.user.id)
-    .eq('status', 'active')
+    .in('status', ['active', 'trialing'])
+    .order('created_at', { ascending: false })
+    .limit(1)
     .single();
 
   if (!sub) return E.noSubscription();
+
+  // 2b. Auto-reset any stuck 'generating' bundles (> 10 min old) before starting fresh
+  const STUCK_MS = 10 * 60 * 1000;
+  const stuckCutoff = new Date(Date.now() - STUCK_MS).toISOString();
+  await supabaseAdmin
+    .from('document_bundles')
+    .update({ status: 'error' })
+    .eq('user_id', auth.user.id)
+    .eq('status', 'generating')
+    .lt('generation_started_at', stuckCutoff);
 
   try {
     const answers    = assessment.answers as Partial<AssessmentAnswers>;

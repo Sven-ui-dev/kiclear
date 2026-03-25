@@ -30,13 +30,29 @@ export async function GET(req: NextRequest) {
       if (error) return E.internal();
 
       // Attach fresh signed URLs for ready bundles
+      // DB column is zip_signed_url (not zip_url) – remap for frontend
+      const STUCK_MS = 10 * 60 * 1000; // 10 min
       const bundlesWithUrls = await Promise.all(
         (bundles ?? []).map(async (b: Record<string, unknown>) => {
-          let zip_url = b.zip_url as string | null;
-          if (b.status === 'ready' && b.zip_path && !zip_url) {
+          // Detect stuck generating bundles (started > 10 min ago)
+          let status = b.status as string;
+          if (status === 'generating' && b.generation_started_at) {
+            const startedAt = new Date(b.generation_started_at as string).getTime();
+            if (Date.now() - startedAt > STUCK_MS) {
+              status = 'error';
+              // Reset in DB so user can retry
+              await supabaseAdmin
+                .from('document_bundles')
+                .update({ status: 'error' })
+                .eq('id', b.id as string);
+            }
+          }
+          // zip_signed_url is what the generate route writes; fall back to fresh signed URL
+          let zip_url = (b.zip_signed_url as string | null) ?? null;
+          if (status === 'ready' && b.zip_path && !zip_url) {
             try { zip_url = await getSignedUrl(b.zip_path as string); } catch { /* ignore */ }
           }
-          return { ...b, zip_url };
+          return { ...b, status, zip_url };
         })
       );
 

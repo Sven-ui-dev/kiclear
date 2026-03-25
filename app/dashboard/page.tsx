@@ -23,6 +23,7 @@ interface Bundle {
   update_reason: string | null;
   law_reference: string | null;
   generation_completed_at: string | null;
+  generation_started_at: string | null;
 }
 interface Assessment {
   id: string;
@@ -232,8 +233,15 @@ export default function DashboardPage() {
 
   const latestBundle = bundles[0] ?? null;
   const gradeConfig  = assessment?.grade ? GRADE_CONFIG[assessment.grade] : null;
-  const isGenerating = generating || latestBundle?.status === 'generating';
-  const canGenerate  = !!sub && sub.status === 'active' && !!assessment?.completed && !isGenerating;
+
+  // Stuck detection: bundle in 'generating' for > 10 min without active polling
+  const STUCK_MS = 10 * 60 * 1000;
+  const isStuck  = !polling && latestBundle?.status === 'generating' &&
+    latestBundle?.generation_started_at != null &&
+    (Date.now() - new Date(latestBundle.generation_started_at as string).getTime()) > STUCK_MS;
+
+  const isGenerating = !isStuck && (generating || latestBundle?.status === 'generating');
+  const canGenerate  = !!sub && (sub.status === 'active' || sub.status === 'trialing') && !!assessment?.completed && !isGenerating;
   const daysLeft     = sub ? Math.max(0, Math.ceil((new Date(sub.current_period_end).getTime() - Date.now()) / 86400000)) : 0;
 
   return (
@@ -397,8 +405,9 @@ export default function DashboardPage() {
             <h2 className="text-lg font-bold text-white mb-1">Nachweispaket generieren</h2>
             <p className="text-white/50 text-sm">
               {!sub ? 'Aktives Abo erforderlich.' :
-               sub.status !== 'active' ? 'Abo nicht aktiv.' :
+               (sub.status !== 'active' && sub.status !== 'trialing') ? 'Abo nicht aktiv.' :
                !assessment?.completed ? 'Bitte zuerst den Check auf kicheck.ai abschließen.' :
+               isStuck ? '⚠ Vorherige Generierung hat nicht reagiert. Erneut versuchen.' :
                isGenerating ? 'Dokumente werden generiert…' :
                bundles.length > 0 ? 'Neue Version aller Dokumente erstellen (~25 Sek.).' :
                'Erstes Nachweispaket erstellen – ca. 25 Sekunden.'}
@@ -432,7 +441,13 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-bold text-white">Nachweispaket v{bundle.version}</span>
                       {bundle.status === 'ready'      && <span className="text-xs bg-green-400/10 text-green-400 border border-green-400/20 px-2 py-0.5 rounded-full">Fertig</span>}
-                      {bundle.status === 'generating' && <span className="text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-2 py-0.5 rounded-full flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand-green animate-pulse" />Generiert… ({bundle.docs_done}/{bundle.docs_total})</span>}
+                      {bundle.status === 'generating' && (() => {
+                        const stuck = !polling && bundle.generation_started_at != null &&
+                          (Date.now() - new Date(bundle.generation_started_at).getTime()) > STUCK_MS;
+                        return stuck
+                          ? <span className="text-xs bg-amber-400/10 text-amber-400 border border-amber-400/20 px-2 py-0.5 rounded-full">Abgebrochen</span>
+                          : <span className="text-xs bg-brand-green/10 text-brand-green border border-brand-green/20 px-2 py-0.5 rounded-full flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-brand-green animate-pulse" />Generiert… ({bundle.docs_done}/{bundle.docs_total})</span>;
+                      })()}
                       {bundle.status === 'error'      && <span className="text-xs bg-red-400/10 text-red-400 border border-red-400/20 px-2 py-0.5 rounded-full">Fehler</span>}
                       {bundle.update_reason           && <span className="text-xs bg-amber-400/10 text-amber-400 border border-amber-400/20 px-2 py-0.5 rounded-full">{bundle.update_reason}</span>}
                     </div>
