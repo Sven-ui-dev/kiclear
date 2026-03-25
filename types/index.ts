@@ -128,6 +128,7 @@ export interface DocumentBundle {
   generation_started_at: string | null;
   generation_completed_at: string | null;
   update_reason: string | null;
+  needs_update: boolean;
   created_at: string;
 }
 

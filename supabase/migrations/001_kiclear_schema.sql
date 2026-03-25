@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS document_bundles (
   zip_path                TEXT,
   zip_signed_url          TEXT,
   update_reason           TEXT,
+  needs_update            BOOLEAN NOT NULL DEFAULT FALSE,
   law_reference           TEXT,
   generation_started_at   TIMESTAMPTZ,
   generation_completed_at TIMESTAMPTZ,
