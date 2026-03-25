@@ -23,14 +23,28 @@ export default function CheckoutPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autostart]);
 
+  const getAuthHeaders = async (): Promise<Record<string, string>> => {
+    try {
+      const { createBrowserClient } = await import('@supabase/ssr');
+      const sb = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { data: { session } } = await sb.auth.getSession();
+      if (session?.access_token) return { 'Authorization': `Bearer ${session.access_token}` };
+    } catch { /* ignore */ }
+    return {};
+  };
+
   const handleCheckout = async () => {
     setLoading(true);
     setError('');
 
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch('/api/subscription/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({ tier, transfer_token: transferToken }),
       });
 
