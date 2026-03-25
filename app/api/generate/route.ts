@@ -10,6 +10,7 @@ import { classify } from '@/lib/classifier';
 import { determineRequiredDocuments } from '@/config/documents';
 import { generateBundle, formatDocumentContent } from '@/lib/generator';
 import { uploadDocumentMarkdown, uploadBundle, getSignedUrl } from '@/lib/storage';
+import { markdownToDocx } from '@/lib/md-to-docx';
 import type { AssessmentAnswers, GenerationContext, DocumentType } from '@/types';
 import archiver from 'archiver';
 import { Writable } from 'stream';
@@ -233,13 +234,26 @@ async function runGeneration(opts: {
   }
 }
 
-// ── Create ZIP from generated documents ──────────────────────────────────────
+// ── Create ZIP with .docx files ──────────────────────────────────────────────
 async function createZipBundle(
   generated: Array<{ docType: DocumentType; content: string; tokens: number; error?: string }>,
   ctx: GenerationContext,
   generatedAt: Date,
   version: number
 ): Promise<Buffer> {
+  // Alle DOCX-Konvertierungen parallel vorbereiten
+  const docxEntries = await Promise.all(
+    generated
+      .filter(gen => !gen.error && gen.content)
+      .map(async (gen, i) => {
+        const mdContent   = formatDocumentContent(gen.docType, gen.content, ctx.companyName ?? 'Ihr Unternehmen', generatedAt);
+        const docxBuffer  = await markdownToDocx(mdContent, gen.docType);
+        const safeDocType = gen.docType.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const fileName    = `${String(i + 1).padStart(2, '0')}_${safeDocType}.docx`;
+        return { buffer: docxBuffer, name: fileName };
+      })
+  );
+
   return new Promise((resolve, reject) => {
     const buffers: Buffer[] = [];
     const writable = new Writable({
@@ -247,18 +261,16 @@ async function createZipBundle(
     });
     writable.on('finish', () => resolve(Buffer.concat(buffers)));
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = archiver('zip', { zlib: { level: 6 } });
     archive.on('error', reject);
     archive.pipe(writable);
 
+    // README
     archive.append(Buffer.from(createReadme(ctx, generatedAt, version), 'utf-8'), { name: 'README.txt' });
 
-    for (const gen of generated) {
-      if (!gen.error && gen.content) {
-        const content     = formatDocumentContent(gen.docType, gen.content, ctx.companyName ?? 'Ihr Unternehmen', generatedAt);
-        const safeDocType = gen.docType.replace(/[^a-zA-Z0-9_-]/g, '_');
-        archive.append(Buffer.from(content, 'utf-8'), { name: `${safeDocType}.md` });
-      }
+    // DOCX-Dateien
+    for (const entry of docxEntries) {
+      archive.append(entry.buffer, { name: entry.name });
     }
 
     archive.finalize();

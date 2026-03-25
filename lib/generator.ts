@@ -20,8 +20,8 @@ function getAnthropic(): Anthropic {
 }
 
 const MODEL           = 'claude-sonnet-4-20250514';
-const MAX_TOKENS      = 2000;
-const MAX_CONCURRENCY = 3; // Reduziert von 5 auf 3 – weniger parallele Calls, weniger 500er
+const MAX_TOKENS      = 4096; // Erhöht von 2000 – verhindert abgeschnittene Dokumente
+const MAX_CONCURRENCY = 3;
 
 // ── Result type ───────────────────────────────────────────────────────────────
 export interface GeneratedDoc {
