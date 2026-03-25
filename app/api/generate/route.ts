@@ -1,5 +1,6 @@
 // POST /api/generate – Start document generation job
-export const dynamic = 'force-dynamic';
+export const dynamic    = 'force-dynamic';
+export const maxDuration = 60; // Vercel Pro: bis zu 60s erlaubt (Generierung 7–12 Docs)
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { parseBody, E, requireAuth } from '@/lib/api-helpers';
@@ -147,6 +148,16 @@ export async function POST(req: NextRequest) {
     console.log('[Generate] Docs OK:', successDocs.length, 'Failed:', failedDocs.length);
     if (failedDocs.length > 0) {
       console.error('[Generate] Failed docs:', failedDocs.map(g => `${g.docType}: ${g.error}`).join(', '));
+    }
+
+    // Abbrechen wenn alle Docs fehlgeschlagen sind (z.B. fehlender API-Key)
+    if (successDocs.length === 0) {
+      const firstError = generated[0]?.error ?? 'Alle Dokumente fehlgeschlagen';
+      await supabaseAdmin
+        .from('document_bundles')
+        .update({ status: 'error' })
+        .eq('id', bundle.id);
+      return E.internal(`Dokumenten-Generierung fehlgeschlagen: ${firstError}`);
     }
 
     const zipBuffer = await createZipBundle(generated, ctx, now, bundleVersion);
