@@ -21,6 +21,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^10.0.0",
+    "@vercel/functions": "^3.4.3",
     "archiver": "^7.0.1",
     "autoprefixer": "^10.4.27",
     "clsx": "^2.1.1",

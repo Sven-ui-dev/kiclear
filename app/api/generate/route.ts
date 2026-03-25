@@ -1,14 +1,14 @@
-// POST /api/generate – Start document generation job
+// POST /api/generate – Start document generation job (async via waitUntil)
 export const dynamic    = 'force-dynamic';
-export const maxDuration = 60; // Vercel Pro: bis zu 60s erlaubt (Generierung 7–12 Docs)
+export const maxDuration = 60;
 import { NextRequest } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import { z } from 'zod';
 import { parseBody, E, requireAuth } from '@/lib/api-helpers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { classify } from '@/lib/classifier';
 import { determineRequiredDocuments } from '@/config/documents';
 import { generateBundle, formatDocumentContent } from '@/lib/generator';
-import { DOCUMENT_META } from '@/config/documents';
 import { uploadDocumentMarkdown, uploadBundle, getSignedUrl } from '@/lib/storage';
 import type { AssessmentAnswers, GenerationContext, DocumentType } from '@/types';
 import archiver from 'archiver';
@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
   if (!sub) return E.noSubscription();
 
   try {
-    const answers = assessment.answers as Partial<AssessmentAnswers>;
+    const answers    = assessment.answers as Partial<AssessmentAnswers>;
     const classResult = classify(answers);
-    const land = (answers.A3 ?? 'DE') as 'DE' | 'AT';  // CH entfernt
+    const land       = (answers.A3 ?? 'DE') as 'DE' | 'AT';
 
     // 3. Get company name from profile
     const { data: profile } = await supabaseAdmin
@@ -69,20 +69,20 @@ export async function POST(req: NextRequest) {
       land,
     };
 
-    const docTypes = determineRequiredDocuments(ctx) as DocumentType[];
-
-    // 4. Create bundle record
+    const docTypes      = determineRequiredDocuments(ctx) as DocumentType[];
     const bundleVersion = (assessment.bundle_version ?? 0) + 1;
+
+    // 4. Create bundle record – synchronous, fast
     const { data: bundle } = await supabaseAdmin
       .from('document_bundles')
       .insert({
-        user_id:        auth.user.id,
-        assessment_id:  data.assessment_id,
-        version:        bundleVersion,
-        status:         'generating',
-        docs_total:     docTypes.length,
-        update_reason:  data.update_reason ?? null,
-        law_reference:  data.law_reference ?? null,
+        user_id:               auth.user.id,
+        assessment_id:         data.assessment_id,
+        version:               bundleVersion,
+        status:                'generating',
+        docs_total:            docTypes.length,
+        update_reason:         data.update_reason ?? null,
+        law_reference:         data.law_reference ?? null,
         generation_started_at: new Date().toISOString(),
       })
       .select()
@@ -90,16 +90,75 @@ export async function POST(req: NextRequest) {
 
     if (!bundle) return E.internal('Bundle-Erstellung fehlgeschlagen.');
 
-    // 5. Generate all documents in parallel
-    const generated = await generateBundle(docTypes, ctx, async (done, total, docType) => {
-      // Update progress in DB
+    // 5. Generierung asynchron – waitUntil hält die Vercel-Function am Leben
+    //    ohne den Client blockieren zu müssen
+    waitUntil(
+      runGeneration({
+        bundleId:      bundle.id,
+        bundleVersion,
+        userId:        auth.user.id,
+        assessmentId:  data.assessment_id,
+        docTypes,
+        ctx,
+        updateReason:  data.update_reason ?? null,
+        lawReference:  data.law_reference ?? null,
+      })
+    );
+
+    // 6. Sofort antworten – Dashboard pollt bundle_id
+    return Response.json({
+      bundle_id: bundle.id,
+      version:   bundleVersion,
+      status:    'generating',
+      docs_total: docTypes.length,
+    });
+
+  } catch (e) {
+    console.error('[/api/generate]', e);
+    return E.internal();
+  }
+}
+
+// ── Background generation worker ─────────────────────────────────────────────
+async function runGeneration(opts: {
+  bundleId:     string;
+  bundleVersion: number;
+  userId:       string;
+  assessmentId: string;
+  docTypes:     DocumentType[];
+  ctx:          GenerationContext;
+  updateReason: string | null;
+  lawReference: string | null;
+}) {
+  const { bundleId, bundleVersion, userId, assessmentId, docTypes, ctx, updateReason, lawReference } = opts;
+
+  try {
+    // Generate all documents
+    const generated = await generateBundle(docTypes, ctx, async (done) => {
       await supabaseAdmin
         .from('document_bundles')
         .update({ docs_done: done })
-        .eq('id', bundle.id);
+        .eq('id', bundleId);
     });
 
-    // 6. Upload each document and create DB records
+    const successDocs = generated.filter(g => !g.error && g.content);
+    const failedDocs  = generated.filter(g => g.error || !g.content);
+    console.log('[Generate] Docs OK:', successDocs.length, 'Failed:', failedDocs.length);
+    if (failedDocs.length > 0) {
+      console.error('[Generate] Failed docs:', failedDocs.map(g => `${g.docType}: ${g.error}`).join(', '));
+    }
+
+    if (successDocs.length === 0) {
+      const firstError = generated[0]?.error ?? 'Alle Dokumente fehlgeschlagen';
+      console.error('[Generate] Aborting – no successful docs:', firstError);
+      await supabaseAdmin
+        .from('document_bundles')
+        .update({ status: 'error' })
+        .eq('id', bundleId);
+      return;
+    }
+
+    // Upload each document
     const docRecords: Array<{ id: string; doc_type: string; storage_path: string }> = [];
     const now = new Date();
 
@@ -110,28 +169,26 @@ export async function POST(req: NextRequest) {
         gen.docType, gen.content, ctx.companyName ?? 'Ihr Unternehmen', now
       );
 
-      // Create document record
       const { data: docRecord } = await supabaseAdmin
         .from('documents')
         .insert({
-          user_id:        auth.user.id,
-          assessment_id:  data.assessment_id,
-          bundle_id:      bundle.id,
-          doc_type:       gen.docType,
-          version:        bundleVersion,
-          status:         'ready',
-          content_raw:    formattedContent,
-          update_reason:  data.update_reason ?? null,
-          law_reference:  data.law_reference ?? null,
-          generated_at:   now.toISOString(),
+          user_id:       userId,
+          assessment_id: assessmentId,
+          bundle_id:     bundleId,
+          doc_type:      gen.docType,
+          version:       bundleVersion,
+          status:        'ready',
+          content_raw:   formattedContent,
+          update_reason: updateReason,
+          law_reference: lawReference,
+          generated_at:  now.toISOString(),
         })
         .select()
         .single();
 
       if (docRecord) {
-        // Upload to storage
         const storagePath = await uploadDocumentMarkdown(
-          auth.user.id, docRecord.id, gen.docType, formattedContent, bundleVersion
+          userId, docRecord.id, gen.docType, formattedContent, bundleVersion
         );
         await supabaseAdmin
           .from('documents')
@@ -142,29 +199,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 7. Create ZIP bundle
-    const successDocs = generated.filter(g => !g.error && g.content);
-    const failedDocs  = generated.filter(g => g.error || !g.content);
-    console.log('[Generate] Docs OK:', successDocs.length, 'Failed:', failedDocs.length);
-    if (failedDocs.length > 0) {
-      console.error('[Generate] Failed docs:', failedDocs.map(g => `${g.docType}: ${g.error}`).join(', '));
-    }
-
-    // Abbrechen wenn alle Docs fehlgeschlagen sind (z.B. fehlender API-Key)
-    if (successDocs.length === 0) {
-      const firstError = generated[0]?.error ?? 'Alle Dokumente fehlgeschlagen';
-      await supabaseAdmin
-        .from('document_bundles')
-        .update({ status: 'error' })
-        .eq('id', bundle.id);
-      return E.internal(`Dokumenten-Generierung fehlgeschlagen: ${firstError}`);
-    }
-
+    // Create ZIP
     const zipBuffer = await createZipBundle(generated, ctx, now, bundleVersion);
-    const zipPath = await uploadBundle(auth.user.id, bundle.id, zipBuffer, bundleVersion);
-    const zipUrl = await getSignedUrl(zipPath);
+    const zipPath   = await uploadBundle(userId, bundleId, zipBuffer, bundleVersion);
+    const zipUrl    = await getSignedUrl(zipPath);
 
-    // 8. Update bundle as complete
+    // Mark bundle ready
     await supabaseAdmin
       .from('document_bundles')
       .update({
@@ -172,30 +212,24 @@ export async function POST(req: NextRequest) {
         zip_path:                zipPath,
         zip_signed_url:          zipUrl,
         docs_done:               docRecords.length,
-        generation_completed_at: new Date().toISOString(),
+        generation_completed_at: now.toISOString(),
       })
-      .eq('id', bundle.id);
+      .eq('id', bundleId);
 
-    // 9. Update assessment version
+    // Update assessment version
     await supabaseAdmin
       .from('assessments')
       .update({ bundle_version: bundleVersion, updated_at: new Date().toISOString() })
-      .eq('id', data.assessment_id);
+      .eq('id', assessmentId);
 
-    return Response.json({
-      bundle_id:           bundle.id,
-      version:             bundleVersion,
-      status:              'ready',
-      docs_generated:      docRecords.length,
-      docs_total:          docTypes.length,
-      zip_url:             zipUrl,
-      zip_expires_at:      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      generated_at:        now.toISOString(),
-    });
+    console.log(`[Generate] ✓ Bundle ${bundleId} fertig – ${docRecords.length}/${docTypes.length} Docs`);
 
   } catch (e) {
-    console.error('[/api/generate]', e);
-    return E.internal();
+    console.error('[Generate] runGeneration Fehler:', e);
+    await supabaseAdmin
+      .from('document_bundles')
+      .update({ status: 'error' })
+      .eq('id', bundleId);
   }
 }
 
@@ -217,14 +251,11 @@ async function createZipBundle(
     archive.on('error', reject);
     archive.pipe(writable);
 
-    // README
     archive.append(Buffer.from(createReadme(ctx, generatedAt, version), 'utf-8'), { name: 'README.txt' });
 
-    // Documents
     for (const gen of generated) {
       if (!gen.error && gen.content) {
-        const content = formatDocumentContent(gen.docType, gen.content, ctx.companyName ?? 'Ihr Unternehmen', generatedAt);
-        // Sicherer Dateiname
+        const content     = formatDocumentContent(gen.docType, gen.content, ctx.companyName ?? 'Ihr Unternehmen', generatedAt);
         const safeDocType = gen.docType.replace(/[^a-zA-Z0-9_-]/g, '_');
         archive.append(Buffer.from(content, 'utf-8'), { name: `${safeDocType}.md` });
       }
@@ -249,9 +280,9 @@ Dieses Paket enthält alle generierten EU AI Act Compliance-Dokumente für Ihr U
 
 WICHTIGER HINWEIS
 -----------------
-Dieses Dokument-Bundle wurde automatisch durch kiclear.ai (Tocay Operations UG) 
-erstellt und dient als technisches Hilfsmittel. Es ersetzt keine individuelle 
-Rechtsberatung. Für verbindliche Rechtssicherheit empfehlen wir die Prüfung 
+Dieses Dokument-Bundle wurde automatisch durch kiclear.ai (Tocay Operations UG)
+erstellt und dient als technisches Hilfsmittel. Es ersetzt keine individuelle
+Rechtsberatung. Für verbindliche Rechtssicherheit empfehlen wir die Prüfung
 durch einen auf KI-Recht spezialisierten Rechtsanwalt.
 
 Tocay Operations UG (haftungsbeschränkt) | Marbach am Neckar | kiclear.ai`;
