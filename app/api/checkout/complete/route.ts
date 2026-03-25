@@ -4,7 +4,6 @@
 // Kein Auth-Check nötig – user_id kommt aus Stripe-Metadaten (tamper-proof).
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getStripe } from '@/lib/stripe';
 
@@ -41,13 +40,13 @@ export async function GET(req: NextRequest) {
     if (typeof session.subscription === 'string') {
       // Expand hat nicht funktioniert → Subscription separat abrufen
       const stripe = getStripe();
-      const fetched = await stripe.subscriptions.retrieve(session.subscription) as unknown as Stripe.Subscription;
+      const fetched = await stripe.subscriptions.retrieve(session.subscription) as unknown as Record<string, unknown>;
       subObj = {
-        id:                   fetched.id,
-        status:               fetched.status,
-        current_period_start: fetched.current_period_start,
-        current_period_end:   fetched.current_period_end,
-        cancel_at_period_end: fetched.cancel_at_period_end,
+        id:                   fetched['id'] as string,
+        status:               fetched['status'] as string,
+        current_period_start: fetched['current_period_start'] as number | undefined,
+        current_period_end:   fetched['current_period_end'] as number | undefined,
+        cancel_at_period_end: fetched['cancel_at_period_end'] as boolean | undefined,
       };
     } else {
       const s = session.subscription as { id: string; status: string; current_period_start?: number; current_period_end?: number; cancel_at_period_end?: boolean };
