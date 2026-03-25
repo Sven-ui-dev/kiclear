@@ -20,8 +20,8 @@ function getAnthropic(): Anthropic {
 }
 
 const MODEL           = 'claude-sonnet-4-20250514';
-const MAX_TOKENS      = 4096; // Erhöht von 2000 – verhindert abgeschnittene Dokumente
-const MAX_CONCURRENCY = 3;
+const MAX_TOKENS      = 4096;
+const MAX_CONCURRENCY = 12; // Alle Docs parallel – kürzer als serielle Batches
 
 // ── Result type ───────────────────────────────────────────────────────────────
 export interface GeneratedDoc {
@@ -125,10 +125,7 @@ export async function generateBundle(
       onProgress?.(done, docTypes.length, result.docType);
     }
 
-    // Kurze Pause zwischen Batches um Rate-Limits zu vermeiden
-    if (i + MAX_CONCURRENCY < docTypes.length) {
-      await new Promise(r => setTimeout(r, 500));
-    }
+    // Keine Pause – MAX_CONCURRENCY 12 bedeutet alle Docs in einem Batch
   }
 
   return results;
