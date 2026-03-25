@@ -208,8 +208,20 @@ export default function DashboardPage() {
     router.push('/');
   };
   const handlePortal = async () => {
-    const r = await fetch('/api/subscription/portal', { method: 'POST' });
-    if (r.ok) { const { portal_url } = await r.json(); window.location.href = portal_url; }
+    try {
+      const headers = await getAuthHeaders();
+      const r = await fetch('/api/subscription/portal', { method: 'POST', headers });
+      if (r.ok) {
+        const { portal_url } = await r.json();
+        window.location.href = portal_url;
+      } else {
+        const d = await r.json().catch(() => ({})) as Record<string, unknown>;
+        const msg = (d?.error as Record<string,unknown>)?.message as string ?? 'Portal konnte nicht geöffnet werden.';
+        alert(msg);
+      }
+    } catch {
+      alert('Portal konnte nicht geöffnet werden. Bitte versuche es erneut.');
+    }
   };
 
   if (loading) return (
