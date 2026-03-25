@@ -1,6 +1,6 @@
 // POST /api/generate – Start document generation job (async via waitUntil)
 export const dynamic    = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300; // Vercel Pro: bis zu 300s – waitUntil braucht Zeit für 7–12 Docs
 import { NextRequest } from 'next/server';
 import { waitUntil } from '@vercel/functions';
 import { z } from 'zod';

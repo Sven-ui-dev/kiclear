@@ -109,7 +109,15 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!polling) return;
+    const pollingStart = Date.now();
+    const TIMEOUT_MS   = 6 * 60 * 1000; // 6 Minuten – waitUntil läuft bis 5 Min
     const iv = setInterval(async () => {
+      // Stuck-Detection: nach 6 Min Generierung abbrechen
+      if (Date.now() - pollingStart > TIMEOUT_MS) {
+        setPolling(null); setGenerating(false);
+        setGenError('Generierung hat zu lange gedauert. Bitte erneut versuchen.');
+        return;
+      }
       const headers = await getAuthHeaders();
       const res = await fetch('/api/documents?type=bundles', { headers });
       if (!res.ok) return;
