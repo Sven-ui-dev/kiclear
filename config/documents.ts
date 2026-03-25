@@ -75,7 +75,8 @@ export function determineRequiredDocuments(ctx: GenerationContext): DocumentType
 export function buildUserPrompt(docType: DocumentType, ctx: GenerationContext): string {
   const { answers: a, riskClass, score, gaps, companyName, land } = ctx;
 
-  const kiTools = (a.B1 ?? []).join(', ') || 'keine angegeben';
+  const b1Arr   = Array.isArray(a.B1) ? a.B1 : (a.B1 ? [a.B1 as string] : []);
+  const kiTools = b1Arr.join(', ') || 'keine angegeben';
   const highGaps = gaps.filter(g => g.severity === 'HIGH').map(g => g.message).join('; ') || 'keine';
 
   const baseCtx = `

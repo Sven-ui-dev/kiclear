@@ -71,7 +71,8 @@ function calcA(a: Partial<AssessmentAnswers>): number {
 }
 function calcB(a: Partial<AssessmentAnswers>): number {
   let s = 0;
-  if (a.B1 && (a.B1 as string[]).length > 0) s += 4;
+  const b1 = Array.isArray(a.B1) ? a.B1 : (a.B1 ? [a.B1] : []);
+  if (b1.length > 0) s += 4;
   if (a.B5 !== undefined) s += 3;
   if (a.B6 === 'nein') s += 5; else if (a.B6 === 'teilweise') s += 2;
   if (a.B8) s += 2;
