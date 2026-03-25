@@ -34,13 +34,32 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard?checkout=error&reason=no_user_id', origin));
     }
 
-    const sub = session.subscription as unknown as {
-      id: string;
-      status: string;
-      current_period_start: number;
-      current_period_end: number;
-      cancel_at_period_end: boolean;
-    };
+    // subscription kann String (ID) oder erweitertes Objekt sein
+    let subObj: { id: string; status: string; current_period_start?: number; current_period_end?: number; cancel_at_period_end?: boolean };
+
+    if (typeof session.subscription === 'string') {
+      // Expand hat nicht funktioniert → Subscription separat abrufen
+      const stripe = getStripe();
+      const fetched = await stripe.subscriptions.retrieve(session.subscription);
+      subObj = {
+        id:                   fetched.id,
+        status:               fetched.status,
+        current_period_start: fetched.current_period_start,
+        current_period_end:   fetched.current_period_end,
+        cancel_at_period_end: fetched.cancel_at_period_end,
+      };
+    } else {
+      const s = session.subscription as { id: string; status: string; current_period_start?: number; current_period_end?: number; cancel_at_period_end?: boolean };
+      subObj = s;
+    }
+
+    const now      = Date.now();
+    const periodStart = subObj.current_period_start
+      ? new Date(subObj.current_period_start * 1000).toISOString()
+      : new Date(now).toISOString();
+    const periodEnd = subObj.current_period_end
+      ? new Date(subObj.current_period_end * 1000).toISOString()
+      : new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const actualTier = session.metadata?.tier ?? tier;
 
@@ -49,13 +68,13 @@ export async function GET(req: NextRequest) {
       .from('subscriptions')
       .upsert({
         user_id:                userId,
-        stripe_subscription_id: sub.id,
+        stripe_subscription_id: subObj.id,
         stripe_customer_id:     session.customer as string,
         tier:                   actualTier,
-        status:                 sub.status,
-        current_period_start:   new Date(sub.current_period_start * 1000).toISOString(),
-        current_period_end:     new Date(sub.current_period_end * 1000).toISOString(),
-        cancel_at_period_end:   sub.cancel_at_period_end,
+        status:                 subObj.status,
+        current_period_start:   periodStart,
+        current_period_end:     periodEnd,
+        cancel_at_period_end:   subObj.cancel_at_period_end ?? false,
       }, { onConflict: 'stripe_subscription_id' });
 
     if (dbError) {
