@@ -25,12 +25,8 @@ export default function CheckoutPage() {
 
   const getAuthHeaders = async (): Promise<Record<string, string>> => {
     try {
-      const { createBrowserClient } = await import('@supabase/ssr');
-      const sb = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-      const { data: { session } } = await sb.auth.getSession();
+      const { getSupabaseBrowser } = await import('@/lib/supabase');
+      const { data: { session } } = await getSupabaseBrowser().auth.getSession();
       if (session?.access_token) return { 'Authorization': `Bearer ${session.access_token}` };
     } catch { /* ignore */ }
     return {};
@@ -49,15 +45,8 @@ export default function CheckoutPage() {
       });
 
       if (res.status === 401) {
-        if (autostart) {
-          // autostart aber 401: Session noch nicht bereit, nochmal versuchen
-          setLoading(false);
-          setError('Session noch nicht bereit – bitte Button klicken.');
-          return;
-        }
-        // Manueller Klick, nicht eingeloggt → zu Register
-        const redirectTarget = `/checkout?tier=${tier}${transferToken ? `&transfer=${transferToken}` : ''}`;
-        window.location.href = `/auth/register?redirect=${encodeURIComponent(redirectTarget)}`;
+        const redirectTarget = `/checkout?tier=${tier}${transferToken ? `&transfer=${transferToken}` : ''}&autostart=1`;
+        window.location.href = `/auth/login?redirect=${encodeURIComponent(redirectTarget)}`;
         return;
       }
 
