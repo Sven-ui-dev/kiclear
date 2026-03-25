@@ -56,9 +56,13 @@ export default function DashboardPage() {
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [bundles,    setBundles]    = useState<Bundle[]>([]);
   const [loading,    setLoading]    = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [genError,   setGenError]   = useState('');
-  const [polling,    setPolling]    = useState<string | null>(null);
+  const [generating,   setGenerating]   = useState(false);
+  const [genError,     setGenError]     = useState('');
+  const [polling,      setPolling]      = useState<string | null>(null);
+  const [companyName,  setCompanyName]  = useState('');
+  const [companyEdit,  setCompanyEdit]  = useState(false);
+  const [companyInput, setCompanyInput] = useState('');
+  const [companySaving,setCompanySaving]= useState(false);
 
   const searchParams = useSearchParams();
 
@@ -141,19 +145,40 @@ export default function DashboardPage() {
   const loadData = async () => {
     try {
       const headers = await getAuthHeaders();
-      const [s, b, a] = await Promise.all([
+      const [s, b, a, p] = await Promise.all([
         fetch('/api/subscription',              { headers }),
         fetch('/api/documents?type=bundles',    { headers }),
         fetch('/api/documents?type=assessment', { headers }),
+        fetch('/api/profile',                   { headers }),
       ]);
       if (s.status === 401) { router.push('/auth/login'); return; }
       const sd = s.ok ? await s.json() : {};
       const bd = b.ok ? await b.json() : {};
       const ad = a.ok ? await a.json() : {};
+      const pd = p.ok ? await p.json() : {};
       setSub(sd.subscription ?? null);
       setBundles(bd.bundles ?? []);
       setAssessment(ad.assessment ?? null);
+      setCompanyName(pd.company_name ?? '');
+      setCompanyInput(pd.company_name ?? '');
     } finally { setLoading(false); }
+  };
+
+  const handleSaveCompany = async () => {
+    if (!companyInput.trim()) return;
+    setCompanySaving(true);
+    try {
+      const headers = await getAuthHeaders();
+      await fetch('/api/profile', {
+        method:  'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ company_name: companyInput.trim() }),
+      });
+      setCompanyName(companyInput.trim());
+      setCompanyEdit(false);
+    } finally {
+      setCompanySaving(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -317,6 +342,41 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Firmenname */}
+        <div className={`rounded-2xl p-5 border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${!companyName ? 'bg-amber-400/5 border-amber-400/20' : 'bg-bg-card border-white/7'}`}>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-mono text-white/40 uppercase tracking-wider mb-1">Unternehmensname</p>
+            {companyEdit ? (
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="text"
+                  value={companyInput}
+                  onChange={e => setCompanyInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveCompany(); if (e.key === 'Escape') setCompanyEdit(false); }}
+                  placeholder="Muster GmbH"
+                  autoFocus
+                  className="flex-1 bg-white/5 border border-white/15 rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-brand-green/50"
+                />
+                <button onClick={handleSaveCompany} disabled={companySaving || !companyInput.trim()}
+                  className="px-3 py-1.5 bg-brand-green text-bg text-xs font-bold rounded-lg hover:bg-green-300 disabled:opacity-40 transition-colors">
+                  {companySaving ? '…' : 'Speichern'}
+                </button>
+                <button onClick={() => setCompanyEdit(false)} className="px-3 py-1.5 text-xs text-white/30 hover:text-white/60 transition-colors">Abbrechen</button>
+              </div>
+            ) : (
+              <p className={`text-sm ${companyName ? 'text-white' : 'text-amber-400'}`}>
+                {companyName || '⚠ Bitte Unternehmensname eintragen – wird in Dokumenten verwendet'}
+              </p>
+            )}
+          </div>
+          {!companyEdit && (
+            <button onClick={() => { setCompanyInput(companyName); setCompanyEdit(true); }}
+              className="shrink-0 text-xs text-white/30 border border-white/10 px-3 py-1.5 rounded-lg hover:bg-white/5 hover:text-white/60 transition-colors">
+              {companyName ? 'Bearbeiten' : 'Eintragen'}
+            </button>
+          )}
         </div>
 
         {/* Generate CTA */}
