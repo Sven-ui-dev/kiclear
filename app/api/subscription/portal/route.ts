@@ -5,8 +5,8 @@ import { E, requireAuth } from '@/lib/api-helpers';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createPortalSession } from '@/lib/stripe';
 
-export async function POST(_req: NextRequest) {
-  const auth = await requireAuth();
+export async function POST(req: NextRequest) {
+  const auth = await requireAuth(req);
   if (!auth.user) return (auth as { user: null; response: Response }).response;
 
   const { data: sub } = await supabaseAdmin
@@ -23,7 +23,7 @@ export async function POST(_req: NextRequest) {
   try {
     const portalUrl = await createPortalSession(
       sub.stripe_customer_id,
-      `${APP}/dashboard/settings`
+      `${APP}/dashboard`
     );
     return Response.json({ portal_url: portalUrl });
   } catch (e) {
