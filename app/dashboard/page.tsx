@@ -89,21 +89,38 @@ export default function DashboardPage() {
         // Nach Stripe-Checkout: Subscription möglicherweise noch nicht in DB
         // (Webhook braucht 1-3 Sek.) → mit Retry pollen
         if (searchParams.get('checkout') === 'success') {
-          // Retry-Loop: Webhook braucht 1-3 Sek. bis Subscription in DB
           const MAX = 8; const DELAY = 1500;
           for (let i = 0; i < MAX; i++) {
             await loadData();
-            // Prüfe ob Subscription jetzt in State ist via API
             const check = await fetch('/api/subscription').then(r => r.json()).catch(() => ({}));
             if (check.subscription) {
               setSub(check.subscription);
-              console.log('[dashboard] sub nach', i+1, 'Versuchen geladen');
               break;
             }
             if (i < MAX - 1) await new Promise(r => setTimeout(r, DELAY));
           }
         } else {
-          loadData();
+          await loadData();
+        }
+
+        // Transfer-Import: kicheck.ai hat import_token mitgeschickt (bestehende Kunden)
+        const importToken = searchParams.get('import_token');
+        if (importToken) {
+          try {
+            const authHdr = await getAuthHeaders();
+            const importRes = await fetch('/api/assessment/import', {
+              method:  'POST',
+              headers: { ...authHdr, 'Content-Type': 'application/json' },
+              body:    JSON.stringify({ transfer_token: importToken }),
+            });
+            if (importRes.ok) {
+              await loadData(); // Refresh assessment
+            }
+          } catch { /* ignore – non-critical */ }
+          // URL bereinigen ohne Reload
+          const clean = new URL(window.location.href);
+          clean.searchParams.delete('import_token');
+          window.history.replaceState({}, '', clean.toString());
         }
       } catch {
         router.push('/auth/login');
